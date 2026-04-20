@@ -837,10 +837,8 @@ wheels = [
 [[package]]
 name = "looming-analysis"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
-    { name = "ipykernel" },
-    { name = "jupyter" },
     { name = "matplotlib" },
     { name = "numpy" },
     { name = "pandas" },
@@ -850,10 +848,14 @@ dependencies = [
     { name = "scipy" },
 ]
 
+[package.dev-dependencies]
+dev = [
+    { name = "ipykernel" },
+    { name = "jupyter" },
+]
+
 [package.metadata]
 requires-dist = [
-    { name = "ipykernel", specifier = ">=7.2.0" },
-    { name = "jupyter", specifier = ">=1.1.1" },
     { name = "matplotlib", specifier = ">=3.10.8" },
     { name = "numpy", specifier = ">=2.4.4" },
     { name = "pandas", specifier = ">=3.0.2" },
@@ -861,6 +863,12 @@ requires-dist = [
     { name = "pyarrow", specifier = ">=23.0.1" },
     { name = "pynumdiff", specifier = ">=0.2.2" },
     { name = "scipy", specifier = ">=1.17.1" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "ipykernel", specifier = ">=7.2.0" },
+    { name = "jupyter", specifier = ">=1.1.1" },
 ]
 
 [[package]]
