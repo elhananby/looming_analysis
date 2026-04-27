@@ -16,6 +16,9 @@ dependencies = [
     "seaborn>=0.13.2",
 ]
 
+[project.scripts]
+looming-analysis = "looming_analysis.cli:main"
+
 [dependency-groups]
 dev = [
     "ipykernel>=7.2.0",
