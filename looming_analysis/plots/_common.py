@@ -18,9 +18,7 @@ def unique_values(responses: list[Response], key: Optional[str]) -> list[Any]:
     return sorted({r.get(key) for r in responses if r.get(key) is not None})
 
 
-def effective_axis(
-    responses: list[Response], key: Optional[str]
-) -> tuple[list, int]:
+def effective_axis(responses: list[Response], key: Optional[str]) -> tuple[list, int]:
     """Return (values_list, n) where values_list is always non-empty.
 
     Returns ([None], 1) when `key` is None or no values are present.
@@ -156,14 +154,23 @@ def plot_violin_facets(
                     if v is not None and not (isinstance(v, float) and np.isnan(v))
                 ]
                 if vals:
-                    vp = ax.violinplot([vals], positions=[x], widths=violin_width, showmeans=True)
+                    vp = ax.violinplot(
+                        [vals], positions=[x], widths=violin_width, showmeans=True
+                    )
                     for pc in vp["bodies"]:
                         pc.set_facecolor(color_map[hv])
                         pc.set_alpha(0.7)
                     for partname in ("cbars", "cmins", "cmaxes", "cmeans"):
                         if partname in vp:
                             vp[partname].set_color(color_map[hv])
-                    ax.text(x, max(vals), f"n={len(vals)}", ha="center", va="bottom", fontsize=8)
+                    ax.text(
+                        x,
+                        max(vals),
+                        f"n={len(vals)}",
+                        ha="center",
+                        va="bottom",
+                        fontsize=8,
+                    )
                 x += 1
             tick_positions.append((group_start + x - 1) / 2)
             tick_labels.append(str(xv) if xv is not None else "all")
@@ -174,7 +181,10 @@ def plot_violin_facets(
 
         if row_idx == 0 and hue_by is not None:
             ax.legend(
-                handles=[Patch(facecolor=color_map[hv], alpha=0.7, label=str(hv)) for hv in hue_vals],
+                handles=[
+                    Patch(facecolor=color_map[hv], alpha=0.7, label=str(hv))
+                    for hv in hue_vals
+                ],
                 title=hue_by,
                 bbox_to_anchor=(1.02, 1),
                 loc="upper left",
@@ -189,7 +199,9 @@ def plot_violin_facets(
             ax.axhline(0, color="k", linestyle="--", alpha=0.3)
         ax.grid(True, alpha=0.3, axis="y")
 
-    dims = [f"{k}={v}" for k, v in [("rows", row_by), ("x", col_by), ("hue", hue_by)] if v]
+    dims = [
+        f"{k}={v}" for k, v in [("rows", row_by), ("x", col_by), ("hue", hue_by)] if v
+    ]
     fig.suptitle(title + ("  |  " + ", ".join(dims) if dims else ""), y=1.02)
     fig.tight_layout()
     return fig

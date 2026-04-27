@@ -124,6 +124,9 @@ hue_by = "group"
         def plot_turn_proportions(self, **kwargs):
             return FakeFigure("turn-proportions")
 
+        def plot_heading_change_comparison(self, **kwargs):
+            return FakeFigure("heading-change-comparison")
+
     monkeypatch.setattr(
         "looming_analysis.run_config.run_analysis", lambda *args, **kwargs: FakeResult()
     )

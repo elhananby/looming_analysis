@@ -119,7 +119,9 @@ def test_saccade_window_can_be_asymmetric():
     time = np.arange(-0.1, 0.5, 0.01)
     ang_vel_deg_s = np.zeros_like(time)
     peak_idx = np.argmin(np.abs(time - 0.20))
-    ang_vel_deg_s[peak_idx - 2 : peak_idx + 3] = 600.0  # 5-sample / 50ms rectangular saccade
+    ang_vel_deg_s[peak_idx - 2 : peak_idx + 3] = (
+        600.0  # 5-sample / 50ms rectangular saccade
+    )
     response = {
         "time": time,
         "ang_vel": np.deg2rad(ang_vel_deg_s),
@@ -214,4 +216,6 @@ def test_heading_change_fields_nan_without_heading_array(responsive_trace_respon
         "heading_change_post_saccade",
         "heading_change_path_length",
     ):
-        assert np.isnan(responses[0][field]), f"{field} should be NaN without heading array"
+        assert np.isnan(responses[0][field]), (
+            f"{field} should be NaN without heading array"
+        )

@@ -47,9 +47,7 @@ def plot_heading_traces(
         hue_vals = unique_values(subset, hue_by) if hue_by else [None]
         for hv in hue_vals:
             hue_subset = (
-                subset
-                if hue_by is None
-                else [r for r in subset if r.get(hue_by) == hv]
+                subset if hue_by is None else [r for r in subset if r.get(hue_by) == hv]
             )
             if not hue_subset:
                 continue

@@ -34,9 +34,7 @@ def _draw_sham_baseline(
     if hue_by is None:
         hue_vals: list = [None]
     else:
-        hue_vals = unique_values(
-            [r for r in all_responses if r.get("sham")], hue_by
-        )
+        hue_vals = unique_values([r for r in all_responses if r.get("sham")], hue_by)
 
     for hv in hue_vals:
         sham_subset = [
@@ -57,7 +55,11 @@ def _draw_sham_baseline(
             sem_resp = np.nanstd(data, axis=0)
 
         color = color_map.get(hv, "steelblue")
-        label = f"{hv} sham (n={len(sham_subset)})" if hv is not None else f"sham (n={len(sham_subset)})"
+        label = (
+            f"{hv} sham (n={len(sham_subset)})"
+            if hv is not None
+            else f"sham (n={len(sham_subset)})"
+        )
         ax.plot(time_axis, mean_resp, color=color, label=label, linestyle=":")
         ax.fill_between(
             time_axis,
@@ -82,7 +84,11 @@ def _draw_traces(
         hue_vals = unique_values(responses, hue_by)
 
     for hv in hue_vals:
-        subset = responses if hue_by is None else [r for r in responses if r.get(hue_by) == hv]
+        subset = (
+            responses
+            if hue_by is None
+            else [r for r in responses if r.get(hue_by) == hv]
+        )
         if not subset:
             continue
 
@@ -93,9 +99,7 @@ def _draw_traces(
             sem_resp = np.nanstd(data, axis=0)
 
         color = color_map.get(hv, "steelblue")
-        label = (
-            f"{hv} (n={len(subset)})" if hv is not None else f"n={len(subset)}"
-        )
+        label = f"{hv} (n={len(subset)})" if hv is not None else f"n={len(subset)}"
         ax.plot(time_axis, mean_resp, color=color, label=label)
         ax.fill_between(
             time_axis,

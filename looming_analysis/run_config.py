@@ -79,15 +79,15 @@ def run_from_config(
 
     figures = {
         "average-angular-velocity.png": result.plot_traces(
-            col_by=col_by, hue_by=hue_by
+            col_by=col_by, hue_by=hue_by, row_by="is_responsive"
         ),
         "average-heading.png": result.plot_heading_traces(
-            col_by=col_by, hue_by=hue_by
+            col_by=col_by, hue_by=hue_by, row_by="is_responsive"
         ),
         "heading-change-distribution.png": result.plot_heading_changes(
             col_by=col_by,
             hue_by=hue_by,
-            absolute=True,
+            row_by="is_responsive",
         ),
         "responsiveness-rates.png": result.plot_responsiveness_rates(
             col_by=col_by,
@@ -96,10 +96,14 @@ def run_from_config(
         "peak-angular-velocity.png": result.plot_peak_velocity(
             col_by=col_by,
             hue_by=hue_by,
+            row_by="is_responsive",
         ),
         "turn-proportions.png": result.plot_turn_proportions(
             x_by=col_by,
             col_by=hue_by,
+        ),
+        "heading-change-comparison.png": result.plot_heading_change_comparison(
+            group_by=hue_by,
         ),
     }
     for filename, fig in figures.items():
@@ -111,14 +115,18 @@ def run_from_config(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run looming analysis from config files.")
-    parser.add_argument("--files", required=True, help="JSON config defining files/groups.")
+    parser = argparse.ArgumentParser(
+        description="Run looming analysis from config files."
+    )
+    parser.add_argument(
+        "--files", required=True, help="JSON config defining files/groups."
+    )
     parser.add_argument(
         "--analysis", required=True, help="TOML config defining analysis parameters."
     )
     parser.add_argument(
         "--output-root",
-        default="outputs",
+        default="results",
         help="Directory for timestamped output folders.",
     )
     return parser

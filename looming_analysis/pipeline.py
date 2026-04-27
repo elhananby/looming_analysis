@@ -19,6 +19,7 @@ from .plots import (
     plot_responses_by_responsiveness,
     plot_responsiveness_rates,
     plot_turn_proportions,
+    plot_heading_change_comparison,
 )
 from .responsiveness import classify_responsiveness, compute_turn_direction
 
@@ -48,6 +49,9 @@ class AnalysisResult:
 
     def plot_heading_changes(self, **kwargs) -> Figure:
         return plot_heading_changes(self.responses, **kwargs)
+
+    def plot_heading_change_comparison(self, **kwargs) -> Figure:
+        return plot_heading_change_comparison(self.responses, **kwargs)
 
     def plot_peak_velocity(self, **kwargs) -> Figure:
         return plot_peak_velocity(self.responses, **kwargs)

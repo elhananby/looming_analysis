@@ -18,7 +18,9 @@ RESPONSIVENESS_METHOD_FIELDS = {
 }
 
 
-def _reaction_window_seconds(window_ms: float | tuple[float, float] | list[float]) -> tuple[float, float]:
+def _reaction_window_seconds(
+    window_ms: float | tuple[float, float] | list[float],
+) -> tuple[float, float]:
     """Return (before_s, after_s) for a scalar or asymmetric ms window."""
     if isinstance(window_ms, (tuple, list)):
         if len(window_ms) != 2:
@@ -235,7 +237,9 @@ def classify_responsiveness(
         # Method 3 — first signed peak above threshold in window
         # ------------------------------------------------------------------
         win_sig = signed_trace[win_indices]
-        _peak_kw = dict(height=threshold_deg_s, prominence=300, width=(3, 8), distance=5)
+        _peak_kw = dict(
+            height=threshold_deg_s, prominence=300, width=(3, 8), distance=5
+        )
         pos_locals, _ = find_peaks(win_sig, **_peak_kw)
         neg_locals, _ = find_peaks(-win_sig, **_peak_kw)
         candidates_local = np.sort(np.concatenate([pos_locals, neg_locals]))
@@ -272,18 +276,26 @@ def classify_responsiveness(
             post_win_mask = (time >= end_t + after_s - 0.1) & (time <= end_t + after_s)
             if post_win_mask.any():
                 post_h = circmean(heading[post_win_mask], low=-np.pi, high=np.pi)
-                hc_window_net = float(np.rad2deg(
-                    np.arctan2(np.sin(post_h - bl_heading), np.cos(post_h - bl_heading))
-                ))
+                hc_window_net = float(
+                    np.rad2deg(
+                        np.arctan2(
+                            np.sin(post_h - bl_heading), np.cos(post_h - bl_heading)
+                        )
+                    )
+                )
             else:
                 hc_window_net = float("nan")
 
             # H1 — max circular deviation from pre-stim baseline in window
             if window_mask.any():
-                deviations = np.abs(np.rad2deg(np.arctan2(
-                    np.sin(heading[window_mask] - bl_heading),
-                    np.cos(heading[window_mask] - bl_heading),
-                )))
+                deviations = np.abs(
+                    np.rad2deg(
+                        np.arctan2(
+                            np.sin(heading[window_mask] - bl_heading),
+                            np.cos(heading[window_mask] - bl_heading),
+                        )
+                    )
+                )
                 hc_max_dev = float(np.nanmax(deviations))
             else:
                 hc_max_dev = float("nan")
@@ -291,14 +303,16 @@ def classify_responsiveness(
             # H2 — net heading change locked to detected saccade (NaN if no saccade)
             if not np.isnan(saccade_peak_time):
                 t_sac = saccade_peak_time / 1000.0
-                pre_sac  = (time >= t_sac - 0.05) & (time < t_sac)
+                pre_sac = (time >= t_sac - 0.05) & (time < t_sac)
                 post_sac = (time > t_sac) & (time <= t_sac + 0.05)
                 if pre_sac.any() and post_sac.any():
-                    h_pre  = circmean(heading[pre_sac],  low=-np.pi, high=np.pi)
+                    h_pre = circmean(heading[pre_sac], low=-np.pi, high=np.pi)
                     h_post = circmean(heading[post_sac], low=-np.pi, high=np.pi)
-                    hc_post_saccade = float(np.rad2deg(
-                        np.arctan2(np.sin(h_post - h_pre), np.cos(h_post - h_pre))
-                    ))
+                    hc_post_saccade = float(
+                        np.rad2deg(
+                            np.arctan2(np.sin(h_post - h_pre), np.cos(h_post - h_pre))
+                        )
+                    )
                 else:
                     hc_post_saccade = float("nan")
             else:
@@ -307,10 +321,14 @@ def classify_responsiveness(
             # H3 — heading path length (total rotation) in window
             win_heading = heading[window_mask]
             if win_heading.size > 1:
-                diffs = np.abs(np.rad2deg(np.arctan2(
-                    np.sin(np.diff(win_heading)),
-                    np.cos(np.diff(win_heading)),
-                )))
+                diffs = np.abs(
+                    np.rad2deg(
+                        np.arctan2(
+                            np.sin(np.diff(win_heading)),
+                            np.cos(np.diff(win_heading)),
+                        )
+                    )
+                )
                 hc_path_length = float(np.sum(diffs))
             else:
                 hc_path_length = float("nan")
@@ -328,7 +346,8 @@ def classify_responsiveness(
             not np.isnan(hc_max_dev) and hc_max_dev >= heading_threshold_deg
         )
         r["is_responsive_heading_post_saccade"] = (
-            not np.isnan(hc_post_saccade) and abs(hc_post_saccade) >= heading_threshold_deg
+            not np.isnan(hc_post_saccade)
+            and abs(hc_post_saccade) >= heading_threshold_deg
         )
         r["is_responsive_heading_path_length"] = (
             not np.isnan(hc_path_length) and hc_path_length >= heading_threshold_deg

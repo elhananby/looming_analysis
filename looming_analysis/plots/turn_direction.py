@@ -10,7 +10,7 @@ from matplotlib.figure import Figure
 from matplotlib.patches import Patch
 
 from .._types import Response
-from ._common import effective_axis, unique_values
+from ._common import effective_axis
 
 _LEFT_COLOR = "#4878D0"
 _RIGHT_COLOR = "#EE854A"
@@ -104,9 +104,7 @@ def plot_turn_proportions(
 
     title = "Turn Direction Proportions"
     dims = [
-        f"{k}={v}"
-        for k, v in [("x", x_by), ("rows", row_by), ("cols", col_by)]
-        if v
+        f"{k}={v}" for k, v in [("x", x_by), ("rows", row_by), ("cols", col_by)] if v
     ]
     if dims:
         title += "  |  " + ", ".join(dims)

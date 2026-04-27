@@ -3,7 +3,11 @@ from __future__ import annotations
 import polars as pl
 
 from looming_analysis.config import AnalysisConfig, ResponsivenessConfig
-from looming_analysis.pipeline import AnalysisResult, normalize_file_selection, run_analysis
+from looming_analysis.pipeline import (
+    AnalysisResult,
+    normalize_file_selection,
+    run_analysis,
+)
 
 
 def test_analysis_result_exposes_scalar_and_long_frames(responsive_trace_response):

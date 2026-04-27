@@ -1,0 +1,5 @@
+# Ignore all custom files; only track the shipped examples.
+*
+!.gitignore
+!*.example.*
+!quickstart.py
