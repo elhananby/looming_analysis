@@ -43,9 +43,11 @@ def compute_turn_direction(
 ) -> list[Response]:
     """Add signed peak angular velocity and turn direction to each response (in-place).
 
-    The peak is defined as the sample with the highest ``|ω|`` within
-    ``[start_offset_s, end_expansion_time + end_offset_s]``.  The sign of
-    ``ω`` at that sample determines turn direction.
+    If ``classify_responsiveness`` has already been called, the sign is taken
+    from ``saccade_peak_ang_vel_signed_deg_s`` (the ``find_peaks``-detected
+    saccade) so that turn direction is consistent with the responsiveness
+    algorithm. Otherwise the peak is defined as the sample with the highest
+    ``|ω|`` within ``[start_offset_s, end_expansion_time + end_offset_s]``.
 
     Fields added to each response dict:
         signed_peak_ang_vel_deg_s (float): Signed ``ω`` at peak |ω| (deg/s).
@@ -56,14 +58,24 @@ def compute_turn_direction(
     Args:
         responses: List of response dicts from ``extract_responses``.
         start_offset_s: Window start relative to stimulus onset (t=0).
-            Negative values extend before onset.
+            Negative values extend before onset. Ignored when saccade peak
+            is already available.
         end_offset_s: Seconds added to ``end_expansion_time`` for window end.
-            Positive values extend past the end of expansion.
+            Positive values extend past the end of expansion. Ignored when
+            saccade peak is already available.
 
     Returns:
         The same list (for chaining).
     """
     for r in responses:
+        # Prefer the saccade-detected signed peak when available.
+        saccade_signed = r.get("saccade_peak_ang_vel_signed_deg_s")
+        if saccade_signed is not None and not np.isnan(saccade_signed):
+            r["signed_peak_ang_vel_deg_s"] = saccade_signed
+            r["turn_direction"] = "right" if saccade_signed > 0 else "left"
+            continue
+
+        # Fallback: raw-max over the expansion window.
         time = r["time"]
         ang_vel_deg = np.rad2deg(r["ang_vel"])
         ang_vel_abs = np.abs(ang_vel_deg)
@@ -261,9 +273,11 @@ def classify_responsiveness(
         # ------------------------------------------------------------------
         # Method 4 — angular impulse in detection window
         # ------------------------------------------------------------------
+        win_abs = ang_vel_abs[window_mask]
         impulse = float(np.sum(trace[window_mask]) * dt)
         r["angular_impulse_deg"] = impulse
         r["is_responsive_impulse"] = impulse >= impulse_threshold_deg
+        r["mean_ang_vel_window_deg_s"] = float(np.nanmean(win_abs)) if win_abs.size > 0 else float("nan")
 
         # ------------------------------------------------------------------
         # Heading change metrics H0–H3 (require r["heading"] in radians)

@@ -1,18 +1,67 @@
+# ── Trial extraction ──────────────────────────────────────────────────────────
 [analysis]
+
+# Milliseconds of data to include before stimulus onset (must be > 0).
 pre_ms = 100
+
+# Milliseconds of data to include after stimulus onset.
+# Should cover the full expansion + hold period plus your expected response window.
 post_ms = 500
+
+# Maximum gap (missing frames in ms) in Kalman tracking allowed within a trial window.
+# Trials with longer gaps are discarded.
 max_gap_ms = 50
+
+# Duration (ms) of the pre- and post-expansion heading averages used to
+# compute the heading_change scalar.  Longer = more stable, but risks
+# including early turns for post.
 heading_ref_ms = 100
+
+# Set to true to include sham trials (stimulus column flagged as sham)
+# alongside real looming trials.
 include_sham = false
+
+# Directory for caching parsed .braidz data.  Subsequent runs skip re-parsing
+# the same files.  Delete or set to "" to force a full reload.
 cache_dir = ".braidz_cache"
 
+
+# ── Responsiveness classification ─────────────────────────────────────────────
 [responsiveness]
+
+# Which criterion writes the primary is_responsive field.
+# Options: "peak" | "zscore" | "heading" | "saccade" | "impulse" | "combined"
+# "combined" (default) requires both a find_peaks saccade AND a heading change
+# above heading_threshold_deg.
 method = "combined"
-threshold_deg_s = 500
+
+# Angular velocity threshold for saccade detection (deg/s).
+# A local peak in the detection window must exceed this to count.
+# Typical wild-type: ~1000 deg/s.  Reduce for weaker genetic lines.
+threshold_deg_s = 300
+
+# Minimum net heading change (degrees) required by the heading and combined
+# methods.  Captures the directional outcome of the turn.
 heading_threshold_deg = 45
-baseline_window_ms = [-90, -10]
+
+# Pre-stimulus window [start_ms, end_ms] relative to stimulus onset used to
+# compute the baseline mean and SD of angular velocity.
+# Avoids the 10 ms immediately before onset to exclude anticipatory movement.
+baseline_window_ms = [-90, 0]
+
+# Reaction window around end_expansion_time (ms).
+# A scalar gives a symmetric ±window (e.g. 200 → ±200 ms = 400 ms total).
+# A two-element list [before_ms, after_ms] gives an asymmetric window.
+# At 100 Hz, ±200 ms = ±20 samples.
 window_ms = 200
 
+
+# ── Plot layout ───────────────────────────────────────────────────────────────
 [plots]
+
+# Stimulus parameter used as the x-axis / column facet in all plots.
 col_by = "stimulus_offset_deg"
+
+# Response field used for color grouping (side-by-side violins / colored lines).
+# Typically "group" when comparing experimental conditions.
 hue_by = "group"
