@@ -3,7 +3,7 @@ pre_ms = 100
 post_ms = 500
 max_gap_ms = 50
 heading_ref_ms = 100
-include_sham = true
+include_sham = false
 cache_dir = ".braidz_cache"
 
 [responsiveness]
@@ -11,7 +11,7 @@ method = "combined"
 threshold_deg_s = 500
 heading_threshold_deg = 45
 baseline_window_ms = [-90, -10]
-window_ms = [100, 200]
+window_ms = 200
 
 [plots]
 col_by = "stimulus_offset_deg"

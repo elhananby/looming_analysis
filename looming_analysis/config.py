@@ -57,11 +57,8 @@ class ResponsivenessConfig:
     window_ms: float | tuple[float, float] | list[float] = 200.0
     zscore_k: float = 3.0
     baseline_window_ms: tuple[float, float] = (-400.0, -100.0)
-    min_duration_ms: float = 30.0
-    max_duration_ms: float = 150.0
     heading_threshold_deg: float = 30.0
     impulse_threshold_deg: float = 20.0
-    post_expansion_ms: float = 200.0
     method: str = "combined"
 
     def as_kwargs(self) -> dict:
@@ -70,10 +67,7 @@ class ResponsivenessConfig:
             "window_ms": self.window_ms,
             "zscore_k": self.zscore_k,
             "baseline_window_ms": self.baseline_window_ms,
-            "min_duration_ms": self.min_duration_ms,
-            "max_duration_ms": self.max_duration_ms,
             "heading_threshold_deg": self.heading_threshold_deg,
             "impulse_threshold_deg": self.impulse_threshold_deg,
-            "post_expansion_ms": self.post_expansion_ms,
             "method": self.method,
         }

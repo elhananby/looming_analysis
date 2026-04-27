@@ -6,6 +6,8 @@ dist/
 wheels/
 *.egg-info
 .ruff_cache/
+.pytest_cache/
+.braidz_cache/
 
 # Virtual environments
 .venv
@@ -25,3 +27,4 @@ notebooks/.braidz_cache/
 
 # plots output directory (not the looming_analysis/plots package)
 /plots/
+/results/

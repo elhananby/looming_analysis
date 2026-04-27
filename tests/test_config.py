@@ -34,10 +34,7 @@ def test_responsiveness_config_as_kwargs():
         "window_ms": 200.0,
         "zscore_k": 3.0,
         "baseline_window_ms": (-90.0, -10.0),
-        "min_duration_ms": 30.0,
-        "max_duration_ms": 150.0,
         "heading_threshold_deg": 45.0,
         "impulse_threshold_deg": 20.0,
-        "post_expansion_ms": 200.0,
         "method": "heading",
     }
