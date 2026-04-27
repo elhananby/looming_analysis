@@ -99,9 +99,9 @@ def classify_responsiveness(
     **Method 2 — heading change:** `|heading_change| ≥ heading_threshold_deg`.
     Captures the net directional *outcome*, independent of instantaneous rate.
 
-    **Method 3 — min-duration saccade:** `|ω| ≥ threshold_deg_s` for a consecutive
-    run of `min_duration_ms`–`max_duration_ms` within the detection window.
-    Records onset time and duration of the first qualifying saccade.
+    **Method 3 — signed-peak saccade:** finds positive peaks in `ω` and negative
+    peaks in `-ω` within the detection window, then selects the signed peak with
+    the largest absolute magnitude. Responsive if `|peak| ≥ threshold_deg_s`.
 
     **Method 4 — angular impulse:** `∑|ω| × dt` over the detection window ≥
     `impulse_threshold_deg`. Robust to brief noise spikes.
@@ -121,8 +121,10 @@ def classify_responsiveness(
         peak_ang_vel_zscore (float)       — method 1 (NaN if sd=0 or no peak)
         is_responsive_zscore (bool)       — method 1
         is_responsive_heading (bool)      — method 2
-        saccade_onset_ms (float)          — method 3 (NaN if no qualifying saccade)
-        saccade_duration_ms (float)       — method 3 (NaN if no qualifying saccade)
+        saccade_peak_time_ms (float)      — method 3 (NaN if no qualifying saccade)
+        saccade_peak_ang_vel_signed_deg_s — method 3 (NaN if no qualifying saccade)
+        saccade_onset_ms (float)          — legacy alias for saccade_peak_time_ms
+        saccade_duration_ms (float)       — always NaN; duration is not used
         is_responsive_saccade (bool)      — method 3
         angular_impulse_deg (float)       — method 4
         is_responsive_impulse (bool)      — method 4
@@ -138,8 +140,8 @@ def classify_responsiveness(
         zscore_k: Z-score threshold for method 1.
         baseline_window_ms: (start, end) in ms relative to stim onset for baseline stats.
             Default (-400, -100) avoids the 100 ms immediately before stimulus onset.
-        min_duration_ms: Minimum saccade duration for method 3.
-        max_duration_ms: Maximum saccade duration for method 3.
+        min_duration_ms: Deprecated; retained for backward-compatible calls.
+        max_duration_ms: Deprecated; retained for backward-compatible calls.
         heading_threshold_deg: Heading change threshold for methods 2 and 5 (degrees).
         impulse_threshold_deg: Angular impulse threshold for method 4 (degrees).
         post_expansion_ms: ms after `end_expansion_time` included in the method 5
@@ -157,9 +159,6 @@ def classify_responsiveness(
     half_win = window_ms / 1000.0
     bl_start = baseline_window_ms[0] / 1000.0
     bl_end = baseline_window_ms[1] / 1000.0
-    min_dur_frames = min_duration_ms / 1000.0
-    max_dur_frames = max_duration_ms / 1000.0
-
     for r in responses:
         time = r["time"]
         dt = float(time[1] - time[0]) if len(time) > 1 else DT_SECONDS
@@ -208,40 +207,29 @@ def classify_responsiveness(
         )
 
         # ------------------------------------------------------------------
-        # Method 3 — min-duration saccade
+        # Method 3 — signed-peak saccade
         # ------------------------------------------------------------------
-        saccade_onset = float("nan")
-        saccade_dur = float("nan")
-        found_saccade = False
+        signed_trace = np.where(np.isnan(ang_vel_deg_signed), 0.0, ang_vel_deg_signed)
+        positive_peaks, _ = find_peaks(signed_trace)
+        negative_peaks, _ = find_peaks(-signed_trace)
+        candidate_peaks = np.concatenate([positive_peaks, negative_peaks])
+        candidate_peaks = candidate_peaks[window_mask[candidate_peaks]]
 
-        in_run = False
-        run_start_idx = 0
-        window_indices = np.where(window_mask)[0]
+        if candidate_peaks.size > 0:
+            best_idx = int(candidate_peaks[np.nanargmax(np.abs(signed_trace[candidate_peaks]))])
+            saccade_peak = float(ang_vel_deg_signed[best_idx])
+            saccade_peak_time = float(time[best_idx] * 1000.0)
+        else:
+            saccade_peak = float("nan")
+            saccade_peak_time = float("nan")
 
-        for idx in window_indices:
-            above = trace[idx] >= threshold_deg_s
-            if above and not in_run:
-                in_run = True
-                run_start_idx = idx
-            elif not above and in_run:
-                run_dur = (idx - run_start_idx) * dt
-                if min_dur_frames <= run_dur <= max_dur_frames:
-                    saccade_onset = float(time[run_start_idx] * 1000.0)
-                    saccade_dur = float(run_dur * 1000.0)
-                    found_saccade = True
-                    break
-                in_run = False
-        # Handle run that extends to end of window
-        if in_run and not found_saccade:
-            run_dur = (window_indices[-1] + 1 - run_start_idx) * dt
-            if min_dur_frames <= run_dur <= max_dur_frames:
-                saccade_onset = float(time[run_start_idx] * 1000.0)
-                saccade_dur = float(run_dur * 1000.0)
-                found_saccade = True
-
-        r["saccade_onset_ms"] = saccade_onset
-        r["saccade_duration_ms"] = saccade_dur
-        r["is_responsive_saccade"] = found_saccade
+        r["saccade_peak_time_ms"] = saccade_peak_time
+        r["saccade_peak_ang_vel_signed_deg_s"] = saccade_peak
+        r["saccade_onset_ms"] = saccade_peak_time
+        r["saccade_duration_ms"] = float("nan")
+        r["is_responsive_saccade"] = (not np.isnan(saccade_peak)) and (
+            abs(saccade_peak) >= threshold_deg_s
+        )
 
         # ------------------------------------------------------------------
         # Method 4 — angular impulse in detection window
