@@ -13,16 +13,19 @@ from .plots import (
     plot_responsiveness_rates,
     plot_turn_proportions,
 )
+from .pipeline import AnalysisResult, normalize_file_selection, run_analysis
 from .responsiveness import classify_responsiveness, compute_turn_direction
 from .signal import calculate_angular_velocity
 
 __all__ = [
     "AnalysisConfig",
+    "AnalysisResult",
     "calculate_angular_velocity",
     "classify_responsiveness",
     "compute_turn_direction",
     "extract_responses",
     "load_braidz",
+    "normalize_file_selection",
     "responses_to_dataframe",
     "plot_heading_changes",
     "plot_heading_traces",
@@ -34,4 +37,5 @@ __all__ = [
     "process_all_files",
     "process_file_groups",
     "ResponsivenessConfig",
+    "run_analysis",
 ]
