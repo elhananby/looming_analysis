@@ -6,6 +6,7 @@ from .extract import extract_responses, process_all_files, process_file_groups
 from .io import load_braidz
 from .plots import (
     plot_heading_changes,
+    plot_heading_traces,
     plot_peak_velocity,
     plot_responses,
     plot_responses_by_responsiveness,
@@ -24,6 +25,7 @@ __all__ = [
     "load_braidz",
     "responses_to_dataframe",
     "plot_heading_changes",
+    "plot_heading_traces",
     "plot_peak_velocity",
     "plot_responses",
     "plot_responses_by_responsiveness",
