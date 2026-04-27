@@ -172,9 +172,12 @@ def extract_responses(
             headings, stim_idx, stim_idx + expansion_frames, heading_ref_frames
         )
         ang_vel = calculate_angular_velocity(xvel, yvel, dt, params=[2, 0.2])
+        heading_deg = np.rad2deg(np.arctan2(np.sin(headings), np.cos(headings)))
 
         response_data: Response = {
             "ang_vel": ang_vel,
+            "heading": headings,
+            "heading_deg": heading_deg,
             "heading_change": heading_change,
             "end_expansion_time": expansion_frames * dt,
             "time": (df_res["frame"].to_numpy() - stim_frame) * dt,
