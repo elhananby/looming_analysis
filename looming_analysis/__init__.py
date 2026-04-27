@@ -3,6 +3,7 @@
 from .dataframe import responses_to_dataframe
 from .config import AnalysisConfig, ResponsivenessConfig
 from .extract import extract_responses, process_all_files, process_file_groups
+from .files import find_braidz
 from .io import load_braidz
 from .plots import (
     plot_heading_changes,
@@ -24,6 +25,7 @@ __all__ = [
     "classify_responsiveness",
     "compute_turn_direction",
     "extract_responses",
+    "find_braidz",
     "load_braidz",
     "normalize_file_selection",
     "responses_to_dataframe",
