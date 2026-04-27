@@ -10,9 +10,8 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.patches import Patch
 
-from ._common import unique_values
-
-Response = dict
+from .._types import Response
+from ._common import effective_axis, unique_values
 
 _LEFT_COLOR = "#4878D0"
 _RIGHT_COLOR = "#EE854A"
@@ -59,15 +58,9 @@ def plot_turn_proportions(
     if responsive_only:
         responses = [r for r in responses if r.get("is_responsive")]
 
-    x_vals = unique_values(responses, x_by)
-    row_vals = unique_values(responses, row_by)
-    col_vals = unique_values(responses, col_by)
-
-    n_rows = len(row_vals) if row_vals else 1
-    n_cols = len(col_vals) if col_vals else 1
-    effective_rows = row_vals if row_vals else [None]
-    effective_cols = col_vals if col_vals else [None]
-    effective_x = x_vals if x_vals else [None]
+    effective_x, _ = effective_axis(responses, x_by)
+    effective_rows, n_rows = effective_axis(responses, row_by)
+    effective_cols, n_cols = effective_axis(responses, col_by)
 
     fig, axes = plt.subplots(
         n_rows,
@@ -91,7 +84,7 @@ def plot_turn_proportions(
                 if (row_by is None or r.get(row_by) == rv)
                 and (col_by is None or r.get(col_by) == cv)
             ]
-            _draw_bars(ax, subset, x_by, effective_x)
+            _draw_stacked_bars(ax, subset, x_by, effective_x)
 
             if ri == 0 and col_by is not None:
                 ax.set_title(f"{col_by} = {cv}")
@@ -123,7 +116,7 @@ def plot_turn_proportions(
     return fig
 
 
-def _draw_bars(ax, subset: list[Response], x_by: str, x_vals: list) -> None:
+def _draw_stacked_bars(ax, subset: list[Response], x_by: str, x_vals: list) -> None:
     positions = np.arange(len(x_vals))
     bar_width = 0.6
 

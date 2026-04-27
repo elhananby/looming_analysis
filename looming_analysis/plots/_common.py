@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-Response = dict
+from .._types import Response
 
 
 def unique_values(responses: list[Response], key: Optional[str]) -> list[Any]:
@@ -16,6 +16,20 @@ def unique_values(responses: list[Response], key: Optional[str]) -> list[Any]:
     if key is None:
         return []
     return sorted({r.get(key) for r in responses if r.get(key) is not None})
+
+
+def effective_axis(
+    responses: list[Response], key: Optional[str]
+) -> tuple[list, int]:
+    """Return (values_list, n) where values_list is always non-empty.
+
+    Returns ([None], 1) when `key` is None or no values are present.
+    Otherwise returns (sorted_unique_values, len).
+    """
+    vals = unique_values(responses, key)
+    if not vals:
+        return [None], 1
+    return vals, len(vals)
 
 
 def iter_facets(
@@ -64,7 +78,7 @@ def build_hue_colormap(
 
 
 def prepare_ang_vel(
-    response_list: list[Response],
+    responses: list[Response],
     time_axis: np.ndarray,
     baseline_subtract: bool,
 ) -> np.ndarray:
@@ -73,7 +87,7 @@ def prepare_ang_vel(
     When `baseline_subtract` is True, each trial's mean `|ω|` during the
     pre-stimulus window (`time < 0`) is subtracted from that trial's trace.
     """
-    data_abs_deg = np.abs(np.rad2deg(np.stack([r["ang_vel"] for r in response_list])))
+    data_abs_deg = np.abs(np.rad2deg(np.stack([r["ang_vel"] for r in responses])))
     if baseline_subtract:
         pre_mask = time_axis < 0
         if pre_mask.any():
@@ -81,6 +95,104 @@ def prepare_ang_vel(
                 baseline = np.nanmean(data_abs_deg[:, pre_mask], axis=1, keepdims=True)
             data_abs_deg = data_abs_deg - baseline
     return data_abs_deg
+
+
+def plot_violin_facets(
+    responses: list[Response],
+    *,
+    value_fn: Callable[[Response], float | None],
+    row_by: Optional[str] = None,
+    col_by: Optional[str] = None,
+    hue_by: Optional[str] = None,
+    responsive_only: bool = False,
+    ylabel: str,
+    title: str,
+    show_zero_line: bool = True,
+    ax_size: tuple[float, float] = (7, 5),
+) -> "plt.Figure":
+    """Generic faceted violin plot.
+
+    Each violin shows the distribution of `value_fn(response)` for trials
+    matching one (row_val, col_val, hue_val) cell. NaN values are dropped.
+    """
+    from matplotlib.patches import Patch  # local to avoid circular at module level
+
+    if responsive_only:
+        responses = [r for r in responses if r.get("is_responsive")]
+
+    effective_rows, n_rows = effective_axis(responses, row_by)
+    effective_x, _ = effective_axis(responses, col_by)
+    hue_vals = unique_values(responses, hue_by) if hue_by else [None]
+
+    width = max(ax_size[0], 1.0 * max(len(effective_x), 1) * max(len(hue_vals), 1))
+    fig, axes = plt.subplots(
+        n_rows, 1, figsize=(width, ax_size[1] * n_rows), squeeze=False
+    )
+    color_map = build_hue_colormap(responses, hue_by)
+
+    violin_width = 0.7
+    gap = 1.0
+
+    for row_idx, row_val in enumerate(effective_rows):
+        ax = axes[row_idx, 0]
+        x = 0.0
+        tick_positions: list[float] = []
+        tick_labels: list[str] = []
+
+        for xv in effective_x:
+            group_start = x
+            for hv in hue_vals:
+                subset = [
+                    r
+                    for r in responses
+                    if (row_by is None or r.get(row_by) == row_val)
+                    and (col_by is None or r.get(col_by) == xv)
+                    and (hue_by is None or r.get(hue_by) == hv)
+                ]
+                vals = [
+                    v
+                    for r in subset
+                    for v in [value_fn(r)]
+                    if v is not None and not (isinstance(v, float) and np.isnan(v))
+                ]
+                if vals:
+                    vp = ax.violinplot([vals], positions=[x], widths=violin_width, showmeans=True)
+                    for pc in vp["bodies"]:
+                        pc.set_facecolor(color_map[hv])
+                        pc.set_alpha(0.7)
+                    for partname in ("cbars", "cmins", "cmaxes", "cmeans"):
+                        if partname in vp:
+                            vp[partname].set_color(color_map[hv])
+                    ax.text(x, max(vals), f"n={len(vals)}", ha="center", va="bottom", fontsize=8)
+                x += 1
+            tick_positions.append((group_start + x - 1) / 2)
+            tick_labels.append(str(xv) if xv is not None else "all")
+            x += gap
+
+        ax.set_xticks(tick_positions)
+        ax.set_xticklabels(tick_labels)
+
+        if row_idx == 0 and hue_by is not None:
+            ax.legend(
+                handles=[Patch(facecolor=color_map[hv], alpha=0.7, label=str(hv)) for hv in hue_vals],
+                title=hue_by,
+                bbox_to_anchor=(1.02, 1),
+                loc="upper left",
+            )
+        if row_by is not None:
+            ax.set_ylabel(f"{row_by} = {row_val}\n{ylabel}")
+        else:
+            ax.set_ylabel(ylabel)
+        if row_idx == n_rows - 1 and col_by is not None:
+            ax.set_xlabel(col_by)
+        if show_zero_line:
+            ax.axhline(0, color="k", linestyle="--", alpha=0.3)
+        ax.grid(True, alpha=0.3, axis="y")
+
+    dims = [f"{k}={v}" for k, v in [("rows", row_by), ("x", col_by), ("hue", hue_by)] if v]
+    fig.suptitle(title + ("  |  " + ", ".join(dims) if dims else ""), y=1.02)
+    fig.tight_layout()
+    return fig
 
 
 def annotate_facet(

@@ -15,3 +15,12 @@ data/
 
 # Jupyter
 .ipynb_checkpoints
+
+# Claude 
+.claude/
+
+# .cache
+notebooks/.braidz_cache/
+
+# plots output directory (not the looming_analysis/plots package)
+/plots/

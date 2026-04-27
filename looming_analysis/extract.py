@@ -9,10 +9,67 @@ import numpy as np
 import polars as pl
 from scipy.stats import circmean
 
+from ._types import DT_SECONDS, Response
 from .io import load_braidz
 from .signal import calculate_angular_velocity
 
-Response = dict
+
+def _slice_trial(
+    df_obj: pl.DataFrame,
+    stim_frame: int,
+    pre_frames: int,
+    post_frames: int,
+    max_gap_frames: int,
+) -> pl.DataFrame | None:
+    """Slice a trial window. Returns filled DataFrame, or None if too gappy."""
+    target_frames = pl.DataFrame(
+        {
+            "frame": np.arange(
+                stim_frame + pre_frames, stim_frame + post_frames, dtype=np.int64
+            )
+        }
+    )
+    df_res = target_frames.join(df_obj, on="frame", how="left")
+    if df_res["xvel"].null_count() > max_gap_frames:
+        return None
+    return df_res.fill_null(strategy="forward").fill_null(strategy="backward")
+
+
+def _compute_heading_change(
+    headings: np.ndarray,
+    stim_idx: int,
+    end_expansion_idx: int,
+    ref_frames: int,
+) -> float:
+    """Heading change in degrees, wrapped to [-180, 180]."""
+    pre_window = (
+        headings[max(0, stim_idx - ref_frames) : stim_idx]
+        if stim_idx > 0
+        else headings[:1]
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        heading_before = circmean(pre_window, low=-np.pi, high=np.pi)
+
+    if end_expansion_idx < len(headings):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            heading_after = circmean(
+                headings[end_expansion_idx : end_expansion_idx + ref_frames],
+                low=-np.pi,
+                high=np.pi,
+            )
+    else:
+        heading_after = headings[-1]
+
+    return float(
+        np.rad2deg(
+            np.arctan2(
+                np.sin(heading_after - heading_before),
+                np.cos(heading_after - heading_before),
+            )
+        )
+    )
 
 
 def extract_responses(
@@ -22,7 +79,9 @@ def extract_responses(
     post_frames: int = 100,
     max_gap_frames: int = 5,
     debug: bool = False,
+    verbose: bool = True,
     heading_ref_frames: int = 10,
+    include_sham: bool = False,
 ) -> list[Response]:
     """Extract one response trajectory per stimulus row.
 
@@ -39,9 +98,12 @@ def extract_responses(
         max_gap_frames: Maximum number of missing frames tolerated per trial.
             Trials exceeding this are skipped; smaller gaps are filled.
         debug: If True, print a line for every skipped stimulus row.
+        verbose: If True, print a summary line after extraction.
         heading_ref_frames: Number of frames averaged to compute the heading
             reference before stimulus onset and after expansion end.
             Default 10 frames = 100 ms at 100 Hz.
+        include_sham: If True, extract sham trials (where `sham` column is truthy)
+            alongside real looming trials. If False, skip sham trials.
 
     Returns:
         List of response dicts, each containing:
@@ -58,13 +120,25 @@ def extract_responses(
     n_total = len(df_stim)
     n_no_track = 0
     n_too_many_gaps = 0
-    dt = 0.01  # 100 Hz
+    n_sham_total = 0
+    n_sham_skipped = 0
+    dt = DT_SECONDS
 
     kalman_grouped = df_kalman.partition_by("obj_id", as_dict=True)
 
     for row in df_stim.iter_rows(named=True):
         obj_id = row["obj_id"]
         stim_frame = row["frame"]
+        is_sham = bool(row.get("sham", False))
+
+        if is_sham:
+            n_sham_total += 1
+
+        if is_sham and not include_sham:
+            n_sham_skipped += 1
+            if debug:
+                print(f"  [skip] obj_id={obj_id} frame={stim_frame}: sham trial")
+            continue
 
         obj_key = (obj_id,)
         if obj_key not in kalman_grouped:
@@ -75,66 +149,28 @@ def extract_responses(
 
         df_obj = kalman_grouped[obj_key]
 
-        target_frames = pl.DataFrame(
-            {
-                "frame": np.arange(
-                    stim_frame + pre_frames, stim_frame + post_frames, dtype=np.int64
-                )
-            }
+        df_res = _slice_trial(
+            df_obj, stim_frame, pre_frames, post_frames, max_gap_frames
         )
-        df_res = target_frames.join(df_obj, on="frame", how="left")
-
-        null_count = df_res["xvel"].null_count()
-        if null_count > max_gap_frames:
+        if df_res is None:
             n_too_many_gaps += 1
             if debug:
                 print(
-                    f"  [skip] obj_id={obj_id} frame={stim_frame}: "
-                    f"{null_count} missing frames (limit={max_gap_frames})"
+                    f"  [skip] obj_id={obj_id} frame={stim_frame}: too many missing frames"
                 )
             continue
 
-        df_res = df_res.fill_null(strategy="forward").fill_null(strategy="backward")
-
         xvel = df_res["xvel"].to_numpy()
         yvel = df_res["yvel"].to_numpy()
-
         headings = np.arctan2(yvel, xvel)
 
         stim_idx = abs(pre_frames)
-        pre_window = (
-            headings[max(0, stim_idx - heading_ref_frames) : stim_idx]
-            if stim_idx > 0
-            else headings[:1]
-        )
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            heading_before = circmean(pre_window, low=-np.pi, high=np.pi)
-
         expansion_duration_ms = row.get("expansion_duration_ms", 500)
         expansion_frames = int(expansion_duration_ms / 10)
-        end_expansion_idx = stim_idx + expansion_frames
 
-        if end_expansion_idx < len(headings):
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                heading_after = circmean(
-                    headings[
-                        end_expansion_idx : end_expansion_idx + heading_ref_frames
-                    ],
-                    low=-np.pi,
-                    high=np.pi,
-                )
-        else:
-            heading_after = headings[-1]
-
-        heading_change = np.rad2deg(
-            np.arctan2(
-                np.sin(heading_after - heading_before),
-                np.cos(heading_after - heading_before),
-            )
+        heading_change = _compute_heading_change(
+            headings, stim_idx, stim_idx + expansion_frames, heading_ref_frames
         )
-
         ang_vel = calculate_angular_velocity(xvel, yvel, dt, params=[2, 0.2])
 
         response_data: Response = {
@@ -152,11 +188,17 @@ def extract_responses(
 
     n_kept = len(responses)
     n_skipped = n_total - n_kept
-    print(
-        f"  extract_responses: {n_total} stimuli → {n_kept} kept, "
-        f"{n_skipped} skipped "
-        f"(no track: {n_no_track}, too many gaps: {n_too_many_gaps})"
-    )
+    if verbose:
+        sham_note = (
+            f"sham found: {n_sham_total}, skipped: {n_sham_skipped}"
+            if n_sham_total > 0
+            else "sham: 0"
+        )
+        print(
+            f"  extract_responses: {n_total} stimuli → {n_kept} kept, "
+            f"{n_skipped} skipped "
+            f"(no track: {n_no_track}, too many gaps: {n_too_many_gaps}, {sham_note})"
+        )
     return responses
 
 
@@ -169,6 +211,8 @@ def process_all_files(
     debug: bool = False,
     heading_ref_frames: int = 10,
     max_gap_frames: int = 5,
+    include_sham: bool = False,
+    cache_dir: Optional[str] = None,
 ) -> list[Response]:
     """Process multiple `.braidz` files and combine the responses.
 
@@ -181,6 +225,9 @@ def process_all_files(
         debug: If True, print a line for each skipped stimulus row.
         heading_ref_frames: Frames averaged for pre/post heading reference.
         max_gap_frames: Maximum missing frames tolerated per trial.
+        include_sham: If True, extract sham trials alongside real looming trials.
+        cache_dir: Optional parquet cache directory. If set, data is cached
+            on first load and loaded from cache on subsequent runs.
 
     Returns:
         Flat list of response dicts from all files.
@@ -189,7 +236,7 @@ def process_all_files(
     for path in file_paths:
         if verbose:
             print(f"Processing {path}...")
-        df_kalman, df_stim = load_braidz(path)
+        df_kalman, df_stim = load_braidz(path, cache_dir=cache_dir)
         if df_stim is None:
             if verbose:
                 print(f"  No stim data found in {path}.")
@@ -201,8 +248,10 @@ def process_all_files(
             pre_frames=pre_frames,
             post_frames=post_frames,
             debug=debug,
+            verbose=verbose,
             heading_ref_frames=heading_ref_frames,
             max_gap_frames=max_gap_frames,
+            include_sham=include_sham,
         )
         if group_name is not None:
             for r in responses:
@@ -221,6 +270,8 @@ def process_file_groups(
     debug: bool = False,
     heading_ref_frames: int = 10,
     max_gap_frames: int = 5,
+    include_sham: bool = False,
+    cache_dir: Optional[str] = None,
 ) -> list[Response]:
     """Process multiple groups of `.braidz` files.
 
@@ -232,6 +283,9 @@ def process_file_groups(
         debug: If True, print a line for each skipped stimulus row.
         heading_ref_frames: Frames averaged for pre/post heading reference.
         max_gap_frames: Maximum missing frames tolerated per trial.
+        include_sham: If True, extract sham trials alongside real looming trials.
+        cache_dir: Optional parquet cache directory. If set, data is cached
+            on first load and loaded from cache on subsequent runs.
 
     Returns:
         Combined list of responses, each tagged with a `'group'` key.
@@ -249,6 +303,8 @@ def process_file_groups(
             debug=debug,
             heading_ref_frames=heading_ref_frames,
             max_gap_frames=max_gap_frames,
+            include_sham=include_sham,
+            cache_dir=cache_dir,
         )
         if verbose:
             print(f"  Total for group '{group_name}': {len(responses)} responses.")

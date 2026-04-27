@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 from scipy.signal import find_peaks
 
-Response = dict
+from ._types import DT_SECONDS, Response
 
 
 def compute_turn_direction(
@@ -69,15 +69,19 @@ def classify_responsiveness(
     max_duration_ms: float = 150.0,
     heading_threshold_deg: float = 30.0,
     impulse_threshold_deg: float = 20.0,
+    post_expansion_ms: float = 200.0,
 ) -> list[Response]:
-    """Tag each response dict with responsiveness metadata from 4 methods (in-place).
+    """Tag each response dict with responsiveness metadata from 5 methods (in-place).
 
-    All methods are computed unconditionally; callers choose which
-    `is_responsive_*` field to use. Existing `is_responsive` / `peak_ang_vel_deg_s`
-    fields are preserved unchanged.
+    All methods are computed unconditionally. `is_responsive` reflects Method 5
+    (the default criterion). The `is_responsive_*` fields let callers use any
+    individual method instead.
 
-    **Method 0 — peak (existing):** peak `|ω|` ≥ `threshold_deg_s` within ±`window_ms`
-    of `end_expansion_time`.
+    **Method 0 — peak:** peak `|ω|` ≥ `threshold_deg_s` within ±`window_ms`
+    of `end_expansion_time`. Uses `scipy.signal.find_peaks`, which requires a local
+    maximum within the window. A monotonically rising trace without a clear peak will
+    fail Method 0 but may still satisfy Methods 3 (saccade) and 4 (impulse), which
+    scan the raw trace.
 
     **Method 1 — z-score:** same peak, normalised by pre-stim baseline SD.
     Responsive if `peak_zscore ≥ zscore_k`.
@@ -92,9 +96,15 @@ def classify_responsiveness(
     **Method 4 — angular impulse:** `∑|ω| × dt` over the detection window ≥
     `impulse_threshold_deg`. Robust to brief noise spikes.
 
+    **Method 5 — signed peak + heading change (default):** finds the sample with
+    the highest `|ω|` on the *signed* trace (no absolute-value baseline inflation)
+    within `[t=0, end_expansion_time + post_expansion_ms]`, then requires both
+    `|peak| ≥ threshold_deg_s` AND `|heading_change| ≥ heading_threshold_deg`.
+    This is the most specific criterion and sets `is_responsive`.
+
     Fields added to each response dict:
-        is_responsive (bool)              — method 0 (unchanged)
-        peak_ang_vel_deg_s (float)        — method 0 (unchanged)
+        is_responsive (bool)              — method 5 (default)
+        peak_ang_vel_deg_s (float)        — method 0
         baseline_ang_vel_mean (float)     — method 1
         baseline_ang_vel_sd (float)       — method 1
         peak_ang_vel_zscore (float)       — method 1 (NaN if sd=0 or no peak)
@@ -105,18 +115,23 @@ def classify_responsiveness(
         is_responsive_saccade (bool)      — method 3
         angular_impulse_deg (float)       — method 4
         is_responsive_impulse (bool)      — method 4
+        peak_ang_vel_signed_deg_s (float) — method 5
+        is_responsive_combined (bool)     — method 5
 
     Args:
         responses: List of response dicts from `extract_responses`.
-        threshold_deg_s: `|ω|` threshold used by methods 0, 1, and 3.
-        window_ms: Half-width (ms) of the detection window around `end_expansion_time`.
+        threshold_deg_s: `|ω|` threshold used by methods 0, 1, 3, and 5.
+        window_ms: Half-width (ms) of the detection window around `end_expansion_time`
+            (methods 0–4 only).
         zscore_k: Z-score threshold for method 1.
         baseline_window_ms: (start, end) in ms relative to stim onset for baseline stats.
             Default (-400, -100) avoids the 100 ms immediately before stimulus onset.
         min_duration_ms: Minimum saccade duration for method 3.
         max_duration_ms: Maximum saccade duration for method 3.
-        heading_threshold_deg: Heading change threshold for method 2 (degrees).
+        heading_threshold_deg: Heading change threshold for methods 2 and 5 (degrees).
         impulse_threshold_deg: Angular impulse threshold for method 4 (degrees).
+        post_expansion_ms: ms after `end_expansion_time` included in the method 5
+            detection window. Default 200 ms.
 
     Returns:
         The same list (for chaining).
@@ -129,8 +144,9 @@ def classify_responsiveness(
 
     for r in responses:
         time = r["time"]
-        dt = float(time[1] - time[0]) if len(time) > 1 else 0.01
-        ang_vel_abs = np.abs(np.rad2deg(r["ang_vel"]))
+        dt = float(time[1] - time[0]) if len(time) > 1 else DT_SECONDS
+        ang_vel_deg_signed = np.rad2deg(r["ang_vel"])
+        ang_vel_abs = np.abs(ang_vel_deg_signed)
         end_t = r["end_expansion_time"]
 
         # NaN-safe trace for peak/run detection
@@ -215,5 +231,23 @@ def classify_responsiveness(
         impulse = float(np.sum(trace[window_mask]) * dt)
         r["angular_impulse_deg"] = impulse
         r["is_responsive_impulse"] = impulse >= impulse_threshold_deg
+
+        # ------------------------------------------------------------------
+        # Method 5 — signed peak + heading change (default / is_responsive)
+        # ------------------------------------------------------------------
+        m5_mask = (time >= 0) & (time <= end_t + post_expansion_ms / 1000.0)
+        m5_vals = ang_vel_deg_signed[m5_mask]
+        if m5_vals.size > 0 and not np.all(np.isnan(m5_vals)):
+            m5_peak_idx = int(np.nanargmax(np.abs(m5_vals)))
+            signed_peak = float(m5_vals[m5_peak_idx])
+        else:
+            signed_peak = float("nan")
+        r["peak_ang_vel_signed_deg_s"] = signed_peak
+        r["is_responsive_combined"] = (
+            (not np.isnan(signed_peak))
+            and (abs(signed_peak) >= threshold_deg_s)
+            and (abs(r.get("heading_change", 0.0)) >= heading_threshold_deg)
+        )
+        r["is_responsive"] = r["is_responsive_combined"]
 
     return responses

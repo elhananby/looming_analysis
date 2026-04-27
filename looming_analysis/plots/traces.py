@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.figure import Figure
 
+from .._types import Response
 from ._common import (
     annotate_facet,
     build_hue_colormap,
@@ -16,12 +17,60 @@ from ._common import (
     unique_values,
 )
 
-Response = dict
+
+def _draw_sham_baseline(
+    ax,
+    all_responses: list[Response],
+    *,
+    row_by: Optional[str],
+    row_val,
+    col_by: Optional[str],
+    col_val,
+    hue_by: Optional[str],
+    color_map: dict,
+    baseline_subtract: bool,
+) -> None:
+    """Overlay sham trials as dotted lines, grouped by hue_by."""
+    if hue_by is None:
+        hue_vals: list = [None]
+    else:
+        hue_vals = unique_values(
+            [r for r in all_responses if r.get("sham")], hue_by
+        )
+
+    for hv in hue_vals:
+        sham_subset = [
+            r
+            for r in all_responses
+            if r.get("sham")
+            and (row_by is None or r.get(row_by) == row_val)
+            and (col_by is None or r.get(col_by) == col_val)
+            and (hue_by is None or r.get(hue_by) == hv)
+        ]
+        if not sham_subset:
+            continue
+
+        time_axis = sham_subset[0]["time"]
+        data = prepare_ang_vel(sham_subset, time_axis, baseline_subtract)
+        with np.errstate(all="ignore"):
+            mean_resp = np.nanmean(data, axis=0)
+            sem_resp = np.nanstd(data, axis=0)
+
+        color = color_map.get(hv, "steelblue")
+        label = f"{hv} sham (n={len(sham_subset)})" if hv is not None else f"sham (n={len(sham_subset)})"
+        ax.plot(time_axis, mean_resp, color=color, label=label, linestyle=":")
+        ax.fill_between(
+            time_axis,
+            mean_resp - sem_resp,
+            mean_resp + sem_resp,
+            alpha=0.1,
+            color=color,
+        )
 
 
 def _draw_traces(
     ax,
-    subset: list[Response],
+    responses: list[Response],
     hue_by: Optional[str],
     color_map: dict,
     baseline_subtract: bool,
@@ -30,25 +79,22 @@ def _draw_traces(
     if hue_by is None:
         hue_vals: list = [None]
     else:
-        hue_vals = unique_values(subset, hue_by)
+        hue_vals = unique_values(responses, hue_by)
 
     for hv in hue_vals:
-        if hue_by is None:
-            hue_subset = subset
-        else:
-            hue_subset = [r for r in subset if r.get(hue_by) == hv]
-        if not hue_subset:
+        subset = responses if hue_by is None else [r for r in responses if r.get(hue_by) == hv]
+        if not subset:
             continue
 
-        time_axis = hue_subset[0]["time"]
-        data = prepare_ang_vel(hue_subset, time_axis, baseline_subtract)
+        time_axis = subset[0]["time"]
+        data = prepare_ang_vel(subset, time_axis, baseline_subtract)
         with np.errstate(all="ignore"):
             mean_resp = np.nanmean(data, axis=0)
             sem_resp = np.nanstd(data, axis=0)
 
         color = color_map.get(hv, "steelblue")
         label = (
-            f"{hv} (n={len(hue_subset)})" if hv is not None else f"n={len(hue_subset)}"
+            f"{hv} (n={len(subset)})" if hv is not None else f"n={len(subset)}"
         )
         ax.plot(time_axis, mean_resp, color=color, label=label)
         ax.fill_between(
@@ -73,6 +119,7 @@ def plot_responses(
     hue_by: Optional[str] = None,
     baseline_subtract: bool = True,
     sharey: bool = True,
+    show_sham_baseline: bool = False,
     ax_size: tuple[float, float] = (5, 4),
 ) -> Figure:
     """Faceted mean ± SEM `|angular velocity|` over time.
@@ -84,6 +131,9 @@ def plot_responses(
         hue_by: Column name mapped to line colors within each subplot.
         baseline_subtract: Subtract per-trial pre-stim baseline from |ω|.
         sharey: Share y-axis across all subplots.
+        show_sham_baseline: If True, overlay sham trials as dotted lines with
+            the same color as their corresponding group. Requires `hue_by` to
+            map to groups (e.g., `hue_by="group"`).
         ax_size: (width, height) per subplot in inches.
 
     Returns:
@@ -114,6 +164,18 @@ def plot_responses(
         ax = axes[position[0], position[1]]
         if subset:
             _draw_traces(ax, subset, hue_by, color_map, baseline_subtract)
+            if show_sham_baseline:
+                _draw_sham_baseline(
+                    ax,
+                    responses,
+                    row_by=row_by,
+                    row_val=row_val,
+                    col_by=col_by,
+                    col_val=col_val,
+                    hue_by=hue_by,
+                    color_map=color_map,
+                    baseline_subtract=baseline_subtract,
+                )
         annotate_facet(ax, row_val, col_val, row_by, col_by, position, ylabel)
 
     _suptitle(fig, row_by, col_by, hue_by, prefix="Fly Response to Looming")

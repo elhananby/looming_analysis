@@ -8,9 +8,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.figure import Figure
 
-from ._common import build_hue_colormap, unique_values
-
-Response = dict
+from .._types import Response
+from ._common import build_hue_colormap, effective_axis, unique_values
 
 
 def plot_responsiveness_rates(
@@ -41,13 +40,9 @@ def plot_responsiveness_rates(
     Returns:
         The matplotlib Figure.
     """
-    row_vals = unique_values(responses, row_by)
-    x_vals = unique_values(responses, col_by)
+    effective_rows, n_rows = effective_axis(responses, row_by)
+    effective_x, _ = effective_axis(responses, col_by)
     hue_vals = unique_values(responses, hue_by) if hue_by else [None]
-
-    n_rows = len(row_vals) if row_vals else 1
-    effective_rows = row_vals if row_vals else [None]
-    effective_x = x_vals if x_vals else [None]
 
     width = max(ax_size[0], 1.1 * max(len(effective_x), 1) * max(len(hue_vals), 1))
 
@@ -58,7 +53,7 @@ def plot_responsiveness_rates(
 
     for row_idx, row_val in enumerate(effective_rows):
         ax = axes[row_idx, 0]
-        _draw_bars(
+        _draw_grouped_bars(
             ax,
             responses=responses,
             row_by=row_by,
@@ -92,7 +87,7 @@ def plot_responsiveness_rates(
     return fig
 
 
-def _draw_bars(
+def _draw_grouped_bars(
     ax,
     *,
     responses,
