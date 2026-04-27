@@ -1,6 +1,7 @@
 """Looming analysis: load `.braidz`, extract responses, plot faceted results."""
 
 from .dataframe import responses_to_dataframe
+from .config import AnalysisConfig, ResponsivenessConfig
 from .extract import extract_responses, process_all_files, process_file_groups
 from .io import load_braidz
 from .plots import (
@@ -15,6 +16,7 @@ from .responsiveness import classify_responsiveness, compute_turn_direction
 from .signal import calculate_angular_velocity
 
 __all__ = [
+    "AnalysisConfig",
     "calculate_angular_velocity",
     "classify_responsiveness",
     "compute_turn_direction",
@@ -29,4 +31,5 @@ __all__ = [
     "plot_turn_proportions",
     "process_all_files",
     "process_file_groups",
+    "ResponsivenessConfig",
 ]
