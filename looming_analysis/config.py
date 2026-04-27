@@ -54,7 +54,7 @@ class ResponsivenessConfig:
     """Responsiveness settings for `classify_responsiveness`."""
 
     threshold_deg_s: float = 300.0
-    window_ms: float = 100.0
+    window_ms: float = 200.0
     zscore_k: float = 3.0
     baseline_window_ms: tuple[float, float] = (-400.0, -100.0)
     min_duration_ms: float = 30.0

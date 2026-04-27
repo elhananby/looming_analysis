@@ -71,7 +71,7 @@ def compute_turn_direction(
 def classify_responsiveness(
     responses: list[Response],
     threshold_deg_s: float = 300.0,
-    window_ms: float = 100.0,
+    window_ms: float = 200.0,
     zscore_k: float = 3.0,
     baseline_window_ms: tuple[float, float] = (-400.0, -100.0),
     min_duration_ms: float = 30.0,
@@ -106,11 +106,9 @@ def classify_responsiveness(
     **Method 4 — angular impulse:** `∑|ω| × dt` over the detection window ≥
     `impulse_threshold_deg`. Robust to brief noise spikes.
 
-    **Method 5 — signed peak + heading change (default):** finds the sample with
-    the highest `|ω|` on the *signed* trace (no absolute-value baseline inflation)
-    within `[t=0, end_expansion_time + post_expansion_ms]`, then requires both
-    `|peak| ≥ threshold_deg_s` AND `|heading_change| ≥ heading_threshold_deg`.
-    This is the most specific criterion and sets `is_responsive`.
+    **Method 5 — saccade + heading change (default):** requires Method 3
+    signed-peak saccade detection AND `|heading_change| ≥ heading_threshold_deg`.
+    This is the default criterion and sets `is_responsive`.
 
     Fields added to each response dict:
         is_responsive (bool)              — method 5 (default)
@@ -144,8 +142,7 @@ def classify_responsiveness(
         max_duration_ms: Deprecated; retained for backward-compatible calls.
         heading_threshold_deg: Heading change threshold for methods 2 and 5 (degrees).
         impulse_threshold_deg: Angular impulse threshold for method 4 (degrees).
-        post_expansion_ms: ms after `end_expansion_time` included in the method 5
-            detection window. Default 200 ms.
+        post_expansion_ms: Deprecated; retained for backward-compatible calls.
         method: Which method controls `is_responsive`. One of "peak", "zscore",
             "heading", "saccade", "impulse", or "combined".
 
@@ -239,20 +236,11 @@ def classify_responsiveness(
         r["is_responsive_impulse"] = impulse >= impulse_threshold_deg
 
         # ------------------------------------------------------------------
-        # Method 5 — signed peak + heading change (default / is_responsive)
+        # Method 5 — signed-peak saccade + heading change (default / is_responsive)
         # ------------------------------------------------------------------
-        m5_mask = (time >= 0) & (time <= end_t + post_expansion_ms / 1000.0)
-        m5_vals = ang_vel_deg_signed[m5_mask]
-        if m5_vals.size > 0 and not np.all(np.isnan(m5_vals)):
-            m5_peak_idx = int(np.nanargmax(np.abs(m5_vals)))
-            signed_peak = float(m5_vals[m5_peak_idx])
-        else:
-            signed_peak = float("nan")
-        r["peak_ang_vel_signed_deg_s"] = signed_peak
+        r["peak_ang_vel_signed_deg_s"] = saccade_peak
         r["is_responsive_combined"] = (
-            (not np.isnan(signed_peak))
-            and (abs(signed_peak) >= threshold_deg_s)
-            and (abs(r.get("heading_change", 0.0)) >= heading_threshold_deg)
+            r["is_responsive_saccade"] and r["is_responsive_heading"]
         )
         r["responsiveness_method"] = method
         r["is_responsive"] = bool(r[RESPONSIVENESS_METHOD_FIELDS[method]])

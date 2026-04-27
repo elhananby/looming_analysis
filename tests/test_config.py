@@ -31,7 +31,7 @@ def test_responsiveness_config_as_kwargs():
 
     assert config.as_kwargs() == {
         "threshold_deg_s": 500.0,
-        "window_ms": 100.0,
+        "window_ms": 200.0,
         "zscore_k": 3.0,
         "baseline_window_ms": (-90.0, -10.0),
         "min_duration_ms": 30.0,
