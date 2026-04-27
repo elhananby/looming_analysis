@@ -21,6 +21,7 @@ data/
 
 # .cache
 notebooks/.braidz_cache/
+.worktrees/
 
 # plots output directory (not the looming_analysis/plots package)
 /plots/
