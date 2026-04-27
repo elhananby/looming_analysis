@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import warnings
 from typing import Optional
 
 import numpy as np
@@ -50,9 +49,9 @@ def plot_turn_proportions(
     if not responses:
         raise ValueError("responses list is empty.")
     if "turn_direction" not in responses[0]:
-        warnings.warn(
-            "turn_direction not found on responses — call compute_turn_direction() first.",
-            stacklevel=2,
+        raise ValueError(
+            "Responses do not include 'turn_direction'. "
+            "Call compute_turn_direction(responses) before plotting turn proportions."
         )
 
     if responsive_only:

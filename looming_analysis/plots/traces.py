@@ -111,6 +111,14 @@ def _draw_traces(
     ax.legend(fontsize=8, loc="upper left")
 
 
+def _require_responsiveness(responses: list[Response]) -> None:
+    if responses and "is_responsive" not in responses[0]:
+        raise ValueError(
+            "Responses do not include 'is_responsive'. "
+            "Call classify_responsiveness(responses) before plotting responsive traces."
+        )
+
+
 def plot_responses(
     responses: list[Response],
     *,
@@ -208,6 +216,8 @@ def plot_responses_by_responsiveness(
     Returns:
         The matplotlib Figure.
     """
+    _require_responsiveness(responses)
+
     col_vals = unique_values(responses, col_by)
     n_cols = len(col_vals) if col_vals else 1
     n_rows = 2  # responsive, non-responsive
