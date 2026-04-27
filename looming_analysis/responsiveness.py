@@ -17,6 +17,22 @@ RESPONSIVENESS_METHOD_FIELDS = {
 }
 
 
+def _reaction_window_seconds(window_ms: float | tuple[float, float] | list[float]) -> tuple[float, float]:
+    """Return (before_s, after_s) for a scalar or asymmetric ms window."""
+    if isinstance(window_ms, (tuple, list)):
+        if len(window_ms) != 2:
+            raise ValueError("window_ms must be a number or a two-item sequence.")
+        before_ms, after_ms = window_ms
+    else:
+        before_ms = after_ms = window_ms
+
+    before = float(before_ms)
+    after = float(after_ms)
+    if before < 0 or after < 0:
+        raise ValueError("window_ms values must be >= 0.")
+    return before / 1000.0, after / 1000.0
+
+
 def compute_turn_direction(
     responses: list[Response],
     start_offset_s: float = 0.0,
@@ -71,7 +87,7 @@ def compute_turn_direction(
 def classify_responsiveness(
     responses: list[Response],
     threshold_deg_s: float = 300.0,
-    window_ms: float = 200.0,
+    window_ms: float | tuple[float, float] | list[float] = 200.0,
     zscore_k: float = 3.0,
     baseline_window_ms: tuple[float, float] = (-400.0, -100.0),
     min_duration_ms: float = 30.0,
@@ -87,7 +103,7 @@ def classify_responsiveness(
     the primary `is_responsive` field. The method-specific fields remain available
     for comparison and plotting.
 
-    **Method 0 — peak:** peak `|ω|` ≥ `threshold_deg_s` within ±`window_ms`
+    **Method 0 — peak:** peak `|ω|` ≥ `threshold_deg_s` within `window_ms`
     of `end_expansion_time`. Uses `scipy.signal.find_peaks`, which requires a local
     maximum within the window. A monotonically rising trace without a clear peak will
     fail Method 0 but may still satisfy Methods 3 (saccade) and 4 (impulse), which
@@ -133,8 +149,9 @@ def classify_responsiveness(
     Args:
         responses: List of response dicts from `extract_responses`.
         threshold_deg_s: `|ω|` threshold used by methods 0, 1, 3, and 5.
-        window_ms: Half-width (ms) of the detection window around `end_expansion_time`
-            (methods 0–4 only).
+        window_ms: Reaction window around `end_expansion_time` in ms. A scalar
+            gives a symmetric window (`end - window_ms` to `end + window_ms`).
+            A two-item sequence gives an asymmetric `(before_ms, after_ms)` window.
         zscore_k: Z-score threshold for method 1.
         baseline_window_ms: (start, end) in ms relative to stim onset for baseline stats.
             Default (-400, -100) avoids the 100 ms immediately before stimulus onset.
@@ -153,7 +170,7 @@ def classify_responsiveness(
         valid = ", ".join(sorted(RESPONSIVENESS_METHOD_FIELDS))
         raise ValueError(f"method must be one of: {valid}; got {method!r}")
 
-    half_win = window_ms / 1000.0
+    before_s, after_s = _reaction_window_seconds(window_ms)
     bl_start = baseline_window_ms[0] / 1000.0
     bl_end = baseline_window_ms[1] / 1000.0
     for r in responses:
@@ -166,13 +183,13 @@ def classify_responsiveness(
         # NaN-safe trace for peak/run detection
         trace = np.where(np.isnan(ang_vel_abs), 0.0, ang_vel_abs)
 
-        window_mask = np.abs(time - end_t) <= half_win
+        window_mask = (time >= end_t - before_s) & (time <= end_t + after_s)
 
         # ------------------------------------------------------------------
         # Method 0 — peak (unchanged logic)
         # ------------------------------------------------------------------
         peak_indices, _ = find_peaks(trace)
-        win_peaks = peak_indices[np.abs(time[peak_indices] - end_t) <= half_win]
+        win_peaks = peak_indices[window_mask[peak_indices]]
         if win_peaks.size > 0:
             peak = float(np.max(ang_vel_abs[win_peaks]))
         else:

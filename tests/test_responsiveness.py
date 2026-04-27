@@ -113,3 +113,36 @@ def test_combined_responsiveness_requires_find_peaks_saccade():
     assert responses[0]["is_responsive_heading"] is True
     assert responses[0]["is_responsive_combined"] is False
     assert responses[0]["is_responsive"] is False
+
+
+def test_saccade_window_can_be_asymmetric():
+    time = np.arange(-0.1, 0.5, 0.01)
+    ang_vel_deg_s = np.zeros_like(time)
+    peak_idx = np.argmin(np.abs(time - 0.20))
+    ang_vel_deg_s[peak_idx - 1 : peak_idx + 2] = [0.0, 600.0, 0.0]
+    response = {
+        "time": time,
+        "ang_vel": np.deg2rad(ang_vel_deg_s),
+        "end_expansion_time": 0.30,
+        "heading_change": 60.0,
+    }
+
+    narrow = classify_responsiveness(
+        [dict(response)],
+        method="combined",
+        threshold_deg_s=500.0,
+        heading_threshold_deg=45.0,
+        window_ms=[50.0, 200.0],
+    )
+    wide = classify_responsiveness(
+        [dict(response)],
+        method="combined",
+        threshold_deg_s=500.0,
+        heading_threshold_deg=45.0,
+        window_ms=[150.0, 200.0],
+    )
+
+    assert narrow[0]["is_responsive_saccade"] is False
+    assert narrow[0]["is_responsive"] is False
+    assert wide[0]["is_responsive_saccade"] is True
+    assert wide[0]["is_responsive"] is True
