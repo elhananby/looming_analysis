@@ -7,6 +7,15 @@ from scipy.signal import find_peaks
 
 from ._types import DT_SECONDS, Response
 
+RESPONSIVENESS_METHOD_FIELDS = {
+    "peak": "is_responsive_peak",
+    "zscore": "is_responsive_zscore",
+    "heading": "is_responsive_heading",
+    "saccade": "is_responsive_saccade",
+    "impulse": "is_responsive_impulse",
+    "combined": "is_responsive_combined",
+}
+
 
 def compute_turn_direction(
     responses: list[Response],
@@ -70,12 +79,13 @@ def classify_responsiveness(
     heading_threshold_deg: float = 30.0,
     impulse_threshold_deg: float = 20.0,
     post_expansion_ms: float = 200.0,
+    method: str = "combined",
 ) -> list[Response]:
-    """Tag each response dict with responsiveness metadata from 5 methods (in-place).
+    """Tag each response dict with responsiveness metadata from multiple methods.
 
-    All methods are computed unconditionally. `is_responsive` reflects Method 5
-    (the default criterion). The `is_responsive_*` fields let callers use any
-    individual method instead.
+    All methods are computed unconditionally. `method` selects which method controls
+    the primary `is_responsive` field. The method-specific fields remain available
+    for comparison and plotting.
 
     **Method 0 — peak:** peak `|ω|` ≥ `threshold_deg_s` within ±`window_ms`
     of `end_expansion_time`. Uses `scipy.signal.find_peaks`, which requires a local
@@ -105,6 +115,7 @@ def classify_responsiveness(
     Fields added to each response dict:
         is_responsive (bool)              — method 5 (default)
         peak_ang_vel_deg_s (float)        — method 0
+        is_responsive_peak (bool)         — method 0
         baseline_ang_vel_mean (float)     — method 1
         baseline_ang_vel_sd (float)       — method 1
         peak_ang_vel_zscore (float)       — method 1 (NaN if sd=0 or no peak)
@@ -117,6 +128,7 @@ def classify_responsiveness(
         is_responsive_impulse (bool)      — method 4
         peak_ang_vel_signed_deg_s (float) — method 5
         is_responsive_combined (bool)     — method 5
+        responsiveness_method (str)       — selected method for is_responsive
 
     Args:
         responses: List of response dicts from `extract_responses`.
@@ -132,10 +144,16 @@ def classify_responsiveness(
         impulse_threshold_deg: Angular impulse threshold for method 4 (degrees).
         post_expansion_ms: ms after `end_expansion_time` included in the method 5
             detection window. Default 200 ms.
+        method: Which method controls `is_responsive`. One of "peak", "zscore",
+            "heading", "saccade", "impulse", or "combined".
 
     Returns:
         The same list (for chaining).
     """
+    if method not in RESPONSIVENESS_METHOD_FIELDS:
+        valid = ", ".join(sorted(RESPONSIVENESS_METHOD_FIELDS))
+        raise ValueError(f"method must be one of: {valid}; got {method!r}")
+
     half_win = window_ms / 1000.0
     bl_start = baseline_window_ms[0] / 1000.0
     bl_end = baseline_window_ms[1] / 1000.0
@@ -164,7 +182,7 @@ def classify_responsiveness(
         else:
             peak = float("nan")
         r["peak_ang_vel_deg_s"] = peak
-        r["is_responsive"] = (not np.isnan(peak)) and (peak >= threshold_deg_s)
+        r["is_responsive_peak"] = (not np.isnan(peak)) and (peak >= threshold_deg_s)
 
         # ------------------------------------------------------------------
         # Method 1 — z-score relative to pre-stim baseline
@@ -248,6 +266,7 @@ def classify_responsiveness(
             and (abs(signed_peak) >= threshold_deg_s)
             and (abs(r.get("heading_change", 0.0)) >= heading_threshold_deg)
         )
-        r["is_responsive"] = r["is_responsive_combined"]
+        r["responsiveness_method"] = method
+        r["is_responsive"] = bool(r[RESPONSIVENESS_METHOD_FIELDS[method]])
 
     return responses
