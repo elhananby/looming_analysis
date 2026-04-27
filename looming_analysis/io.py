@@ -3,11 +3,18 @@
 from __future__ import annotations
 
 import gzip
+import hashlib
 import zipfile
 from pathlib import Path
 from typing import Optional
 
 import polars as pl
+
+
+def _braidz_cache_path(file_path: str | Path, cache_dir: str | Path) -> Path:
+    source = Path(file_path)
+    digest = hashlib.sha1(str(source.resolve()).encode("utf-8")).hexdigest()[:10]
+    return Path(cache_dir) / f"{source.stem}-{digest}"
 
 
 def load_braidz(
@@ -32,7 +39,7 @@ def load_braidz(
         Tuple of `(df_kalman, df_stim)`. `df_stim` is `None` if the archive
         contains no stimulus file.
     """
-    cache_path = Path(cache_dir) / Path(file_path).stem if cache_dir else None
+    cache_path = _braidz_cache_path(file_path, cache_dir) if cache_dir else None
 
     if cache_path:
         cache_path.mkdir(parents=True, exist_ok=True)
