@@ -114,20 +114,51 @@ def run_from_config(
     return output_dir
 
 
+class _VerboseParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        self.print_usage()
+        required = {
+            "--files": "a JSON file mapping group names to lists of recording paths",
+            "--analysis": "a TOML file with analysis parameters (thresholds, window sizes, etc.)",
+        }
+        for flag, desc in required.items():
+            if flag in message:
+                self.exit(
+                    2,
+                    f"\nerror: {message}\n"
+                    f"  {flag} expects {desc}\n"
+                    f"  example: {flag} path/to/config{'.json' if 'files' in flag else '.toml'}\n",
+                )
+        self.exit(2, f"\nerror: {message}\n")
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Run looming analysis from config files."
+    parser = _VerboseParser(
+        description="Run looming analysis from config files.",
+        epilog=(
+            "examples:\n"
+            "  %(prog)s --files experiment.json --analysis params.toml\n"
+            "  %(prog)s --files experiment.json --analysis params.toml --output-root /data/results"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "--files", required=True, help="JSON config defining files/groups."
+        "--files",
+        required=True,
+        metavar="FILES_JSON",
+        help="JSON config mapping group names to lists of recording file paths.",
     )
     parser.add_argument(
-        "--analysis", required=True, help="TOML config defining analysis parameters."
+        "--analysis",
+        required=True,
+        metavar="ANALYSIS_TOML",
+        help="TOML config defining analysis parameters (thresholds, window sizes, etc.).",
     )
     parser.add_argument(
         "--output-root",
         default="results",
-        help="Directory for timestamped output folders.",
+        metavar="DIR",
+        help="Root directory for timestamped output folders (default: %(default)s).",
     )
     return parser
 
