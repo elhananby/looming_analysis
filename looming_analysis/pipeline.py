@@ -24,7 +24,7 @@ from .plots import (
     plot_turn_proportions,
     plot_heading_change_comparison,
 )
-from .plots.peak_aligned import compute_peak_latency
+from .plots.peak_aligned import compute_peak_latency, plot_response_latency
 from .responsiveness import classify_responsiveness, compute_turn_direction
 
 
@@ -68,6 +68,9 @@ class AnalysisResult:
 
     def plot_peak_aligned_traces(self, **kwargs) -> Figure:
         return plot_peak_aligned_traces(self.responses, **kwargs)
+
+    def plot_response_latency(self, **kwargs) -> Figure:
+        return plot_response_latency(self.responses, **kwargs)
 
     def plot_screen_position_effect(self, **kwargs) -> Figure:
         return plot_screen_position_effect(self.responses, **kwargs)

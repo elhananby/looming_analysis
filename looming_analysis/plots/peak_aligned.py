@@ -7,6 +7,8 @@ from typing import Optional
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.figure import Figure
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 
 from .._types import DT_SECONDS, Response
 from ._common import annotate_facet, build_hue_colormap, iter_facets, unique_values
@@ -233,7 +235,10 @@ def plot_peak_aligned_traces(
                 n_samples,
                 dt_s,
             )
-        annotate_facet(ax, row_val, col_val, row_by, col_by, position, ylabel)
+        annotate_facet(
+            ax, row_val, col_val, row_by, col_by, position, ylabel,
+            xlabel="Time relative to peak (s)",
+        )
 
     _suptitle(fig, row_by, col_by, hue_by)
     fig.tight_layout()
@@ -252,3 +257,95 @@ def _suptitle(fig: Figure, row_by, col_by, hue_by) -> None:
     if dims:
         parts.append("  |  " + ", ".join(dims))
     fig.suptitle("".join(parts), y=1.02)
+
+
+def plot_response_latency(
+    responses: list[Response],
+    *,
+    hue_by: Optional[str] = "group",
+    bins: int = 40,
+    responsive_only: bool = True,
+    fallback_window_ms: float = 200.0,
+    ax_size: tuple[float, float] = (7, 4),
+) -> Figure:
+    """Histogram of response latency (time from stimulus onset to response peak).
+
+    Latency is read from ``peak_latency_ms`` if already set on each response
+    (e.g. by a prior call to ``plot_peak_aligned_traces`` or
+    ``compute_peak_latency``).  Otherwise it is computed on the fly.
+
+    For responsive trials the latency equals ``saccade_peak_time_ms``; for
+    non-responsive trials it is the argmax of ``|ω|`` in the fallback window.
+    Use ``responsive_only=True`` (default) to restrict the histogram to trials
+    where a saccade was actually detected.
+
+    Args:
+        responses: Response list.
+        hue_by: Field mapped to color grouping.
+        bins: Number of histogram bins.
+        responsive_only: If True (default), only include trials where
+            ``is_responsive`` is True and ``saccade_peak_time_ms`` is finite.
+        fallback_window_ms: Passed to ``compute_peak_latency`` when
+            ``peak_latency_ms`` is not already set.
+        ax_size: Figure size ``(width, height)`` in inches.
+    """
+    # Ensure peak_latency_ms is present.
+    compute_peak_latency(responses, fallback_window_ms=fallback_window_ms)
+
+    fig, ax = plt.subplots(figsize=ax_size)
+    color_map = build_hue_colormap(responses, hue_by)
+    hue_vals = unique_values(responses, hue_by) if hue_by else [None]
+
+    legend_handles = []
+    for hv in hue_vals:
+        subset = [
+            r for r in responses
+            if (hue_by is None or r.get(hue_by) == hv)
+        ]
+        if responsive_only:
+            subset = [
+                r for r in subset
+                if r.get("is_responsive")
+                and r.get("saccade_peak_time_ms") is not None
+                and not np.isnan(float(r["saccade_peak_time_ms"]))
+            ]
+        latencies = np.array(
+            [float(r["peak_latency_ms"]) for r in subset
+             if r.get("peak_latency_ms") is not None
+             and not np.isnan(float(r["peak_latency_ms"]))],
+            dtype=float,
+        )
+        if latencies.size == 0:
+            continue
+
+        color = color_map[hv]
+        ax.hist(latencies, bins=bins, color=color, alpha=0.45, density=True)
+
+        p25, p50, p75 = (float(np.percentile(latencies, p)) for p in (25, 50, 75))
+        mean_val = float(np.mean(latencies))
+
+        ax.axvspan(p25, p75, color=color, alpha=0.12)
+        ax.axvline(p50, color=color, linestyle="-", linewidth=1.5)
+        ax.axvline(mean_val, color=color, linestyle="--", linewidth=1.5)
+
+        label = f"{hv if hv is not None else 'all'}"
+        label += f"\n  mean={mean_val:.0f} ms  median={p50:.0f} ms  IQR=[{p25:.0f}, {p75:.0f}] ms  n={latencies.size}"
+        legend_handles.append(Patch(facecolor=color, alpha=0.6, label=label))
+
+    legend_handles += [
+        Line2D([0], [0], color="grey", linestyle="-", linewidth=1.5, label="median"),
+        Line2D([0], [0], color="grey", linestyle="--", linewidth=1.5, label="mean"),
+        Patch(facecolor="grey", alpha=0.2, label="IQR (25–75th pct)"),
+    ]
+
+    qualifier = "responsive trials" if responsive_only else "all trials"
+    ax.set_title(f"Response latency distribution  ({qualifier})")
+    ax.set_xlabel("Latency: stimulus onset → peak (ms)")
+    ax.set_ylabel("Density")
+    ax.grid(True, alpha=0.3, axis="y")
+    if legend_handles:
+        ax.legend(handles=legend_handles, title=hue_by, loc="upper right",
+                  framealpha=0.9, fontsize=8)
+
+    fig.tight_layout()
+    return fig
