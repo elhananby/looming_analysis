@@ -40,7 +40,6 @@ containing:
 | `average-angular-velocity.png` | Mean \|ω\| traces, faceted by `row_by` |
 | `average-heading.png` | Mean heading traces, faceted by `row_by` |
 | `heading-change-distribution.png` | Heading change violins, faceted by `row_by` |
-| `heading-change-comparison.png` | All five heading metrics across groups |
 | `responsiveness-rates.png` | Fraction responsive per condition |
 | `peak-angular-velocity.png` | Peak \|ω\| distribution, faceted by `row_by` |
 | `turn-proportions.png` | Left/right turn proportions per condition |

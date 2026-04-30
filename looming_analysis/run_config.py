@@ -114,9 +114,6 @@ def run_from_config(
             x_by=col_by,
             col_by=hue_by,
         ),
-        "heading-change-comparison.png": result.plot_heading_change_comparison(
-            group_by=hue_by,
-        ),
         "inter-trigger-interval.png": result.plot_inter_trigger_interval(
             hue_by=hue_by,
             percentile_cutoff=plots.get("iti_percentile_cutoff", None),
