@@ -69,13 +69,15 @@ def run_from_config(
     output_dir = build_output_dir(output_root, file_groups, suffix=suffix)
     output_dir.mkdir(parents=True, exist_ok=False)
 
+    analysis_kwargs = dict(config["analysis"])
+    min_iti_s = analysis_kwargs.pop("min_iti_s", None)
+
     result = run_analysis(
         file_groups,
-        analysis=AnalysisConfig(**config["analysis"]),
+        analysis=AnalysisConfig(**analysis_kwargs),
         responsiveness=ResponsivenessConfig(**config["responsiveness"]),
     )
 
-    min_iti_s = config["analysis"].get("min_iti_s", None)
     if min_iti_s is not None:
         result = result.filter_by_iti(float(min_iti_s), verbose=True)
 
