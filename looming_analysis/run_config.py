@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import AnalysisConfig, ResponsivenessConfig
-from .pipeline import run_analysis
+from .pipeline import AnalysisResult, run_analysis
 
 
 def load_files_config(path: str | Path) -> dict[str, list[str]]:
@@ -45,11 +45,15 @@ def build_output_dir(
     file_groups: dict[str, list[str]],
     *,
     timestamp: str | None = None,
+    suffix: str | None = None,
 ) -> Path:
-    """Build `YYYYMMDD_HHMMSS-G1_G2...` output directory path."""
+    """Build `YYYYMMDD_HHMMSS-G1_G2...[_suffix]` output directory path."""
     timestamp = timestamp or datetime.now().strftime("%Y%m%d_%H%M%S")
     groups = "_".join(str(group) for group in file_groups)
-    return Path(output_root) / f"{timestamp}-{groups}"
+    name = f"{timestamp}-{groups}"
+    if suffix:
+        name = f"{name}_{suffix}"
+    return Path(output_root) / name
 
 
 def run_from_config(
@@ -57,11 +61,12 @@ def run_from_config(
     analysis_config: str | Path,
     *,
     output_root: str | Path = "outputs",
+    suffix: str | None = None,
 ) -> Path:
     """Run analysis from config files and save outputs."""
     file_groups = load_files_config(files_config)
     config = load_analysis_config(analysis_config)
-    output_dir = build_output_dir(output_root, file_groups)
+    output_dir = build_output_dir(output_root, file_groups, suffix=suffix)
     output_dir.mkdir(parents=True, exist_ok=False)
 
     result = run_analysis(
@@ -76,18 +81,25 @@ def run_from_config(
     plots = config["plots"]
     col_by = plots.get("col_by", "stimulus_offset_deg")
     hue_by = plots.get("hue_by", "group")
+    row_by = plots.get("row_by", "is_responsive")
+    responsive_only = plots.get("responsive_only", False)
+
+    responses = result.responses
+    if responsive_only:
+        responses = [r for r in responses if r.get("is_responsive")]
+        result = AnalysisResult(responses)
 
     figures = {
         "average-angular-velocity.png": result.plot_traces(
-            col_by=col_by, hue_by=hue_by, row_by="is_responsive"
+            col_by=col_by, hue_by=hue_by, row_by=row_by
         ),
         "average-heading.png": result.plot_heading_traces(
-            col_by=col_by, hue_by=hue_by, row_by="is_responsive"
+            col_by=col_by, hue_by=hue_by, row_by=row_by
         ),
         "heading-change-distribution.png": result.plot_heading_changes(
             col_by=col_by,
             hue_by=hue_by,
-            row_by="is_responsive",
+            row_by=row_by,
         ),
         "responsiveness-rates.png": result.plot_responsiveness_rates(
             col_by=col_by,
@@ -96,7 +108,7 @@ def run_from_config(
         "peak-angular-velocity.png": result.plot_peak_velocity(
             col_by=col_by,
             hue_by=hue_by,
-            row_by="is_responsive",
+            row_by=row_by,
         ),
         "turn-proportions.png": result.plot_turn_proportions(
             x_by=col_by,
@@ -104,6 +116,13 @@ def run_from_config(
         ),
         "heading-change-comparison.png": result.plot_heading_change_comparison(
             group_by=hue_by,
+        ),
+        "inter-trigger-interval.png": result.plot_inter_trigger_interval(
+            hue_by=hue_by,
+            percentile_cutoff=plots.get("iti_percentile_cutoff", None),
+        ),
+        "screen-position-effect.png": result.plot_screen_position_effect(
+            hue_by=hue_by,
         ),
     }
     for filename, fig in figures.items():
@@ -160,6 +179,12 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="DIR",
         help="Root directory for timestamped output folders (default: %(default)s).",
     )
+    parser.add_argument(
+        "--suffix",
+        default=None,
+        metavar="LABEL",
+        help="Optional string appended to the output folder name (e.g. 'responsive_only').",
+    )
     return parser
 
 
@@ -169,6 +194,7 @@ def main(argv: list[str] | None = None) -> int:
         args.files,
         args.analysis,
         output_root=args.output_root,
+        suffix=args.suffix,
     )
     print(output_dir)
     return 0

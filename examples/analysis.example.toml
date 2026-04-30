@@ -65,3 +65,18 @@ col_by = "stimulus_offset_deg"
 # Response field used for color grouping (side-by-side violins / colored lines).
 # Typically "group" when comparing experimental conditions.
 hue_by = "group"
+
+# Field used to split plots into rows.
+# Use "is_responsive" to split responsive vs non-responsive (default behaviour).
+# Use any trigger or stimulus field (e.g. "refractory_period") to facet by that.
+row_by = "is_responsive"
+
+# Set to true to restrict all plots to responsive trials only.
+# When combined with row_by = "refractory_period" this lets you compare
+# refractory period conditions without the responsive/non-responsive split.
+responsive_only = false
+
+# Percentile cutoff for the ITI histogram (e.g. 99 drops the top 1% of intervals).
+# Useful for removing long idle periods that compress the x-axis.
+# Leave unset or comment out to show all values.
+# iti_percentile_cutoff = 99

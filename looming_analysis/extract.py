@@ -10,7 +10,7 @@ import polars as pl
 from scipy.stats import circmean
 
 from ._types import DT_SECONDS, Response
-from .io import load_braidz
+from .io import load_braidz, load_trigger_config
 from .signal import calculate_angular_velocity
 
 
@@ -245,6 +245,11 @@ def process_all_files(
                 print(f"  No stim data found in {path}.")
             continue
 
+        trigger_params = load_trigger_config(path)
+        if "timestamp" in df_stim.columns:
+            df_stim = df_stim.sort("timestamp").with_columns(
+                pl.col("timestamp").diff().alias("inter_trigger_interval")
+            )
         responses = extract_responses(
             df_kalman,
             df_stim,
@@ -256,8 +261,9 @@ def process_all_files(
             max_gap_frames=max_gap_frames,
             include_sham=include_sham,
         )
-        if group_name is not None:
-            for r in responses:
+        for r in responses:
+            r.update(trigger_params)
+            if group_name is not None:
                 r["group"] = group_name
         if verbose:
             print(f"  Extracted {len(responses)} valid responses.")

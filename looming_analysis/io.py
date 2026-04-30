@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import hashlib
+import tomllib
 import zipfile
 from pathlib import Path
 from typing import Optional
@@ -69,3 +70,37 @@ def load_braidz(
             df_stim.write_parquet(cache_path / "stim.parquet")
 
     return df_kalman, df_stim
+
+
+# Fields extracted from [trigger_handler] in config.toml
+_TRIGGER_FIELDS = (
+    "refractory_period",
+    "z_min",
+    "z_max",
+    "heading_cone_deg",
+    "min_velocity",
+    "max_velocity",
+    "min_tracking_age",
+    "zone_timeout",
+    "pre_zone_expansion",
+)
+
+
+def load_trigger_config(file_path: str | Path) -> dict:
+    """Extract trigger_handler parameters from config.toml inside a braidz.
+
+    Returns a flat dict of the fields listed in ``_TRIGGER_FIELDS``.
+    Missing fields (e.g. ``pre_zone_expansion`` which was added mid-way) are
+    omitted rather than set to None so they don't pollute responses from files
+    that predate them.
+
+    Returns an empty dict if the archive contains no config.toml.
+    """
+    with zipfile.ZipFile(file_path, "r") as z:
+        if "config.toml" not in z.namelist():
+            return {}
+        with z.open("config.toml") as f:
+            config = tomllib.load(f)
+
+    trigger = config.get("trigger_handler", {})
+    return {k: trigger[k] for k in _TRIGGER_FIELDS if k in trigger}

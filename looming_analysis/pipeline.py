@@ -14,10 +14,12 @@ from .extract import process_file_groups
 from .plots import (
     plot_heading_changes,
     plot_heading_traces,
+    plot_inter_trigger_interval,
     plot_peak_velocity,
     plot_responses,
     plot_responses_by_responsiveness,
     plot_responsiveness_rates,
+    plot_screen_position_effect,
     plot_turn_proportions,
     plot_heading_change_comparison,
 )
@@ -58,6 +60,12 @@ class AnalysisResult:
 
     def plot_turn_proportions(self, **kwargs) -> Figure:
         return plot_turn_proportions(self.responses, **kwargs)
+
+    def plot_inter_trigger_interval(self, **kwargs) -> Figure:
+        return plot_inter_trigger_interval(self.responses, **kwargs)
+
+    def plot_screen_position_effect(self, **kwargs) -> Figure:
+        return plot_screen_position_effect(self.responses, **kwargs)
 
 
 def normalize_file_selection(

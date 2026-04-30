@@ -20,20 +20,32 @@ looming-analysis \
   --output-root outputs
 ```
 
-This creates a timestamped folder like `outputs/20260427_153000-CS_Empty-Split/`
+Append a label to the output folder name:
+
+```bash
+looming-analysis \
+  --files examples/CS_vs_J64xKir2.1_all.json \
+  --analysis examples/analysis.toml \
+  --output-root outputs \
+  --suffix responsive_only
+```
+
+This creates a timestamped folder like `outputs/20260427_153000-CS_J64xKir2.1(w+)_responsive_only/`
 containing:
 
 | File | Contents |
 |---|---|
 | `trials.csv` | One row per trial — all scalar fields + responsiveness flags |
 | `traces.parquet` | Long-format angular velocity traces |
-| `average-angular-velocity.png` | Mean \|ω\| traces, split by responsiveness |
-| `average-heading.png` | Mean heading traces, split by responsiveness |
-| `heading-change-distribution.png` | Heading change violins, split by responsiveness |
+| `average-angular-velocity.png` | Mean \|ω\| traces, faceted by `row_by` |
+| `average-heading.png` | Mean heading traces, faceted by `row_by` |
+| `heading-change-distribution.png` | Heading change violins, faceted by `row_by` |
 | `heading-change-comparison.png` | All five heading metrics across groups |
 | `responsiveness-rates.png` | Fraction responsive per condition |
-| `peak-angular-velocity.png` | Peak \|ω\| distribution, split by responsiveness |
+| `peak-angular-velocity.png` | Peak \|ω\| distribution, faceted by `row_by` |
 | `turn-proportions.png` | Left/right turn proportions per condition |
+| `inter-trigger-interval.png` | Histogram of time between consecutive triggers |
+| `screen-position-effect.png` | Peak and mean \|ω\| vs within-screen x position |
 | `*.json` / `*.toml` | Copies of the config files used |
 
 For custom notebook analysis, import the package directly:
@@ -64,7 +76,8 @@ trials = result.to_dataframe(kind="scalar")
 traces = result.to_dataframe(kind="long")
 
 fig = result.plot_traces(hue_by="stimulus_offset_deg")
-heading_fig = result.plot_heading_traces(hue_by="stimulus_offset_deg")
+fig = result.plot_inter_trigger_interval(hue_by="group")
+fig = result.plot_screen_position_effect(hue_by="group")
 ```
 
 ## Comparing Groups
@@ -72,7 +85,7 @@ heading_fig = result.plot_heading_traces(hue_by="stimulus_offset_deg")
 ```python
 file_groups = {
     "CS": find_braidz("/mnt/data/experiments/cs"),
-    "Empty-Split": find_braidz("/mnt/data/experiments/empty-split"),
+    "J64xKir2.1(w+)": find_braidz("/mnt/data/experiments/j64"),
 }
 
 result = run_analysis(file_groups)
@@ -90,7 +103,7 @@ Maps group names to lists of `.braidz` file paths.
 {
   "groups": {
     "CS": ["/path/to/cs_1.braidz", "/path/to/cs_2.braidz"],
-    "Empty-Split": ["/path/to/empty_split_1.braidz"]
+    "J64xKir2.1(w+)": ["/path/to/j64_1.braidz"]
   }
 }
 ```
@@ -106,71 +119,63 @@ Use `"files"` instead of `"groups"` for a single unlabelled condition:
 ```toml
 # ── Trial extraction ──────────────────────────────────────────────────────────
 [analysis]
-
-# Milliseconds of data to include before stimulus onset (must be > 0).
 pre_ms = 100
-
-# Milliseconds of data to include after stimulus onset.
-# Should cover the full expansion + hold period plus your expected response window.
 post_ms = 500
-
-# Maximum gap (ms) in Kalman tracking allowed within a trial window.
-# Trials with longer gaps are discarded.
 max_gap_ms = 50
-
-# Duration (ms) of the pre- and post-expansion heading averages used to
-# compute the heading_change scalar.  Longer = more stable, but risks
-# including early turns for post.
 heading_ref_ms = 100
-
-# Set to true to include sham trials (stimulus column flagged as sham)
-# alongside real looming trials.
 include_sham = false
-
-# Directory for caching parsed .braidz data.  Subsequent runs skip re-parsing
-# the same files.  Delete or set to "" to force a full reload.
 cache_dir = ".braidz_cache"
-
 
 # ── Responsiveness classification ─────────────────────────────────────────────
 [responsiveness]
-
-# Which criterion writes the primary is_responsive field.
-# Options: "peak" | "zscore" | "heading" | "saccade" | "impulse" | "combined"
-# "combined" (default) requires both a find_peaks saccade AND a heading change
-# above heading_threshold_deg.
 method = "combined"
-
-# Angular velocity threshold for saccade detection (deg/s).
-# A local peak in the detection window must exceed this to count.
-# Typical wild-type: ~1000 deg/s.  Reduce for weaker genetic lines.
 threshold_deg_s = 300
-
-# Minimum net heading change (degrees) required by the heading and combined
-# methods.  Captures the directional outcome of the turn.
 heading_threshold_deg = 45
-
-# Pre-stimulus window [start_ms, end_ms] relative to stimulus onset used to
-# compute the baseline mean and SD of angular velocity.
-# Avoids the 10 ms immediately before onset to exclude anticipatory movement.
 baseline_window_ms = [-90, -10]
-
-# Reaction window around end_expansion_time (ms).
-# A scalar gives a symmetric ±window (e.g. 200 → ±200 ms = 400 ms total).
-# A two-element list [before_ms, after_ms] gives an asymmetric window.
-# At 100 Hz, ±200 ms = ±20 samples.
 window_ms = 200
-
 
 # ── Plot layout ───────────────────────────────────────────────────────────────
 [plots]
-
-# Stimulus parameter used as the x-axis / column facet in all plots.
 col_by = "stimulus_offset_deg"
-
-# Response field used for color grouping (side-by-side violins / colored lines).
-# Typically "group" when comparing experimental conditions.
 hue_by = "group"
+
+# "is_responsive" splits rows into responsive/non-responsive (default).
+# Any trigger or stimulus field works, e.g. "refractory_period".
+row_by = "is_responsive"
+
+# Restrict all plots to responsive trials only.
+# Combine with row_by = "refractory_period" to compare refractory conditions
+# without the responsive/non-responsive split.
+responsive_only = false
+
+# Drop the top N% of ITI values from the histogram (e.g. 99 removes the top 1%).
+# iti_percentile_cutoff = 99
+```
+
+See `examples/analysis.example.toml` for the full annotated reference.
+
+## Trigger Metadata
+
+Each `.braidz` archive may contain a `config.toml` with trigger handling
+parameters. These are automatically extracted and attached to every trial as
+scalar fields, making them available for faceting:
+
+| Field | Description |
+|---|---|
+| `refractory_period` | Minimum time between triggers (s) |
+| `z_min` / `z_max` | Z-height bounds of the trigger zone (m) |
+| `heading_cone_deg` | Angular tolerance for heading alignment (°) |
+| `min_velocity` / `max_velocity` | Velocity bounds for trigger eligibility (m/s) |
+| `min_tracking_age` | Minimum object age before triggering (s) |
+| `zone_timeout` | Auto zone-exit timeout (s) |
+| `pre_zone_expansion` | FOV expansion for pre-trigger camera/lens (m) |
+
+Example — facet plots by refractory period to check for cooldown effects:
+
+```toml
+[plots]
+row_by = "refractory_period"
+responsive_only = true
 ```
 
 ## Responsiveness Methods
@@ -180,13 +185,17 @@ The `method` setting controls only which one writes the primary `is_responsive`
 field; the per-method flags remain available for comparison.
 
 | Method | Field | Description |
-|---|---|---|
+|---|---|
 | `peak` | `is_responsive_peak` | First `find_peaks` hit above `threshold_deg_s` in the detection window |
 | `zscore` | `is_responsive_zscore` | Same peak normalised by pre-stimulus baseline SD |
 | `heading` | `is_responsive_heading` | `\|heading_change\| ≥ heading_threshold_deg` |
 | `saccade` | `is_responsive_saccade` | Signed peak detected by `find_peaks` (positive or negative) |
 | `impulse` | `is_responsive_impulse` | Integrated `\|ω\|` over the detection window |
 | `combined` | `is_responsive_combined` | Saccade **and** heading change (default) |
+
+**Detection window:** symmetric `±window_ms` around `end_expansion_time`
+(the moment the looming circle reaches its final size, i.e. `expansion_duration_ms`
+after stimulus onset). The hold period is not included in the window offset.
 
 **Saccade detection parameters** (applied inside `find_peaks`):
 
@@ -221,6 +230,10 @@ result.plot_responsiveness_rates(col_by="stimulus_offset_deg", hue_by="group")
 result.plot_peak_velocity(col_by="stimulus_offset_deg", hue_by="group", row_by="is_responsive")
 result.plot_turn_proportions(x_by="stimulus_offset_deg", col_by="group")
 result.plot_heading_change_comparison(group_by="group")
+
+# Diagnostic plots
+result.plot_inter_trigger_interval(hue_by="group", percentile_cutoff=99)
+result.plot_screen_position_effect(hue_by="group", n_bins=10, responsive_only=True)
 ```
 
 ## Troubleshooting
@@ -228,7 +241,7 @@ result.plot_heading_change_comparison(group_by="group")
 - **Plot requires `classify_responsiveness`** — use `run_analysis` or call
   `classify_responsiveness(responses)` before plotting.
 - **Plot requires `compute_turn_direction`** — use `run_analysis` with
-  `compute_turns=True` or call `compute_turn_direction(responses)`.  Call it
+  `compute_turns=True` or call `compute_turn_direction(responses)`. Call it
   *after* `classify_responsiveness` so turn direction is derived from the
   saccade-detected peak.
 - **Many trials skipped** — rerun with `debug=True` in `process_file_groups` to
@@ -236,6 +249,11 @@ result.plot_heading_change_comparison(group_by="group")
 - **Slow loading** — keep `cache_dir = ".braidz_cache"` enabled; delete the
   cache directory to force a full reload after changing extraction parameters.
 - **Low saccade detection rate** — try reducing `threshold_deg_s` or widening
-  `window_ms`.  Check `heading_change_post_saccade` counts against total
+  `window_ms`. Check `heading_change_post_saccade` counts against total
   responsive counts to gauge how many detected saccades fall outside the
   measurement window.
+- **ITI histogram dominated by long gaps** — set `iti_percentile_cutoff = 99`
+  in `[plots]` to clip the top 1% of intervals.
+- **No screen position data** — `plot_screen_position_effect` silently skips
+  responses without a `pixel_x` field. Recordings from older software versions
+  may not have logged pixel coordinates.
