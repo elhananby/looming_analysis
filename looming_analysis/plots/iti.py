@@ -137,7 +137,9 @@ def plot_inter_trigger_interval(
         ax.legend(
             handles=legend_handles,
             title=hue_by,
-            loc="upper right",
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.18),
+            ncol=len(legend_handles),
             framealpha=0.9,
             fontsize=8,
         )

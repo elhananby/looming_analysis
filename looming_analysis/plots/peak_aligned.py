@@ -340,8 +340,15 @@ def plot_response_latency(
     ax.set_ylabel("Density")
     ax.grid(True, alpha=0.3, axis="y")
     if legend_handles:
-        ax.legend(handles=legend_handles, title=hue_by, loc="upper right",
-                  framealpha=0.9, fontsize=8)
+        ax.legend(
+            handles=legend_handles,
+            title=hue_by,
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.18),
+            ncol=len(legend_handles),
+            framealpha=0.9,
+            fontsize=8,
+        )
 
     fig.tight_layout()
     return fig
