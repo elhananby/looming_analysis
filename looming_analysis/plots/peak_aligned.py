@@ -278,11 +278,20 @@ def plot_latency_by_direction(
         and not np.isnan(float(r["peak_latency_ms"]))
     ]
 
-    fig, ax = plt.subplots(figsize=ax_size)
     color_map = build_hue_colormap(responses, hue_by)
     hue_vals: list = [None] if hue_by is None else unique_values(responses, hue_by)
+    abs_offsets = sorted({abs(float(r["stimulus_offset_deg"])) for r in subset})
+    n_offsets = len(abs_offsets)
+    n_groups = len(hue_vals)
 
-    for hv in hue_vals:
+    # Place violins side-by-side within each offset bin.
+    width = 0.7 / max(n_groups, 1)
+    offsets_idx = {v: i for i, v in enumerate(abs_offsets)}
+    group_offsets = np.linspace(-(n_groups - 1) / 2, (n_groups - 1) / 2, n_groups) * width
+
+    fig, ax = plt.subplots(figsize=(max(ax_size[0], n_offsets * 1.5 * n_groups), ax_size[1]))
+
+    for gi, hv in enumerate(hue_vals):
         group_data = (
             subset if hue_by is None
             else [r for r in subset if r.get(hue_by) == hv]
@@ -290,31 +299,45 @@ def plot_latency_by_direction(
         if not group_data:
             continue
 
-        # Bin by absolute stimulus direction.
-        abs_offsets = sorted({abs(float(r["stimulus_offset_deg"])) for r in group_data})
-        xs, means, sems = [], [], []
+        color = color_map.get(hv, "steelblue")
+        positions = []
+        data_per_pos = []
         for offset in abs_offsets:
-            vals = np.array([
+            vals = [
                 float(r["peak_latency_ms"]) for r in group_data
                 if abs(float(r["stimulus_offset_deg"])) == offset
-            ])
-            xs.append(offset)
-            means.append(float(np.mean(vals)))
-            sems.append(float(np.std(vals) / np.sqrt(len(vals))))
+            ]
+            if vals:
+                positions.append(offsets_idx[offset] + group_offsets[gi])
+                data_per_pos.append(vals)
 
-        xs = np.array(xs)
-        means = np.array(means)
-        sems = np.array(sems)
-        color = color_map.get(hv, "steelblue")
-        label = f"{hv} (n={len(group_data)})" if hv is not None else f"n={len(group_data)}"
-        ax.plot(xs, means, marker="o", color=color, label=label)
-        ax.fill_between(xs, means - sems, means + sems, alpha=0.2, color=color)
-        ax.errorbar(xs, means, yerr=sems, fmt="none", color=color, capsize=4)
+        if not positions:
+            continue
 
+        parts = ax.violinplot(
+            data_per_pos,
+            positions=positions,
+            widths=width * 0.9,
+            showmedians=True,
+            showextrema=False,
+        )
+        for pc in parts["bodies"]:
+            pc.set_facecolor(color)
+            pc.set_alpha(0.55)
+        parts["cmedians"].set_color(color)
+        parts["cmedians"].set_linewidth(1.5)
+
+        # Overlay mean marker.
+        means = [float(np.mean(v)) for v in data_per_pos]
+        ax.scatter(positions, means, color=color, zorder=3, s=30, marker="D",
+                   label=f"{hv if hv is not None else 'all'} (n={len(group_data)})")
+
+    ax.set_xticks(range(n_offsets))
+    ax.set_xticklabels([f"{v:.0f}°" for v in abs_offsets])
     ax.set_xlabel("Stimulus direction (°, absolute)")
     ax.set_ylabel("Response latency (ms)")
-    ax.set_title("Response latency vs stimulus direction  (responsive trials, mean ± SEM)")
-    ax.grid(True, alpha=0.3)
+    ax.set_title("Response latency vs stimulus direction  (responsive trials)")
+    ax.grid(True, alpha=0.3, axis="y")
     if any(hv is not None for hv in hue_vals):
         ax.legend(title=hue_by, framealpha=0.9, fontsize=8)
 
