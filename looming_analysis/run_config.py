@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import AnalysisConfig, ResponsivenessConfig
-from .pipeline import AnalysisResult, run_analysis
+from .pipeline import AnalysisResult, filter_by_iti, run_analysis
 
 
 def load_files_config(path: str | Path) -> dict[str, list[str]]:
@@ -74,6 +74,10 @@ def run_from_config(
         analysis=AnalysisConfig(**config["analysis"]),
         responsiveness=ResponsivenessConfig(**config["responsiveness"]),
     )
+
+    min_iti_s = config["analysis"].get("min_iti_s", None)
+    if min_iti_s is not None:
+        result = result.filter_by_iti(float(min_iti_s), verbose=True)
 
     result.to_dataframe(kind="scalar").write_csv(output_dir / "trials.csv")
     result.to_dataframe(kind="long").write_parquet(output_dir / "traces.parquet")

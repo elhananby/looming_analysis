@@ -79,6 +79,58 @@ class AnalysisResult:
         compute_peak_latency(self.responses, **kwargs)
         return self
 
+    def filter_by_iti(self, min_iti_s: float, *, verbose: bool = True) -> "AnalysisResult":
+        """Return a new AnalysisResult dropping trials with ITI < min_iti_s."""
+        filtered = filter_by_iti(self.responses, min_iti_s, verbose=verbose)
+        return AnalysisResult(filtered)
+
+
+def filter_by_iti(
+    responses: list[Response],
+    min_iti_s: float,
+    *,
+    verbose: bool = True,
+) -> list[Response]:
+    """Return responses where inter_trigger_interval >= min_iti_s.
+
+    Trials with a missing or NaN ITI (the first trigger in each file) are
+    always kept — they cannot have violated the threshold.
+
+    Args:
+        responses: Response list with ``inter_trigger_interval`` set.
+        min_iti_s: Minimum allowed ITI in seconds.  Trials triggered sooner
+            after the previous one are dropped.
+        verbose: If True, print a summary of how many trials were dropped.
+
+    Returns:
+        Filtered list (new list, original is not modified).
+    """
+    kept, dropped = [], []
+    for r in responses:
+        iti = r.get("inter_trigger_interval")
+        if iti is None or (isinstance(iti, float) and iti != iti):  # NaN check
+            kept.append(r)
+        elif float(iti) < min_iti_s:
+            dropped.append(r)
+        else:
+            kept.append(r)
+    if verbose and dropped:
+        import numpy as np
+        total = len(responses)
+        print(
+            f"filter_by_iti: dropped {len(dropped)}/{total} trials "
+            f"with ITI < {min_iti_s} s  "
+            f"(kept {len(kept)}, {100*len(kept)/total:.1f}%)"
+        )
+        if dropped:
+            itv_dropped = [float(r["inter_trigger_interval"]) for r in dropped
+                           if r.get("inter_trigger_interval") is not None]
+            print(
+                f"  dropped ITI range: [{min(itv_dropped):.2f}, {max(itv_dropped):.2f}] s  "
+                f"median={float(np.median(itv_dropped)):.2f} s"
+            )
+    return kept
+
 
 def normalize_file_selection(
     selected_files: list[str] | dict[str, list[str]],

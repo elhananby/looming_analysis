@@ -25,6 +25,12 @@ include_sham = false
 # the same files.  Delete or set to "" to force a full reload.
 cache_dir = ".braidz_cache"
 
+# Minimum inter-trigger interval (seconds).  Trials triggered sooner after the
+# previous one are dropped before analysis and plotting.  The ITI histogram is
+# generated before this filter so you can use it to choose the threshold.
+# Leave unset or comment out to keep all trials.
+# min_iti_s = 3.0
+
 
 # ── Responsiveness classification ─────────────────────────────────────────────
 [responsiveness]
