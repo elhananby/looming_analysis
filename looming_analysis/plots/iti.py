@@ -8,6 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 
 from .._types import Response
 from ._common import build_hue_colormap, unique_values
@@ -23,16 +24,19 @@ def plot_inter_trigger_interval(
 ) -> Figure:
     """Histogram of inter-trigger intervals (time between consecutive triggers).
 
+    Each group is drawn as a semi-transparent histogram with:
+    - a dashed vertical line at the mean,
+    - a solid vertical line at the median (50th percentile),
+    - a shaded band spanning the IQR (25th–75th percentile).
+
     Args:
         responses: Response list. Each response must have an
             ``inter_trigger_interval`` field (seconds); None values are skipped.
-        hue_by: Field used for color grouping. Overlapping semi-transparent
-            histograms are drawn per unique value. Pass ``None`` for a single
+        hue_by: Field used for color grouping. Pass ``None`` for a single
             combined histogram.
         bins: Number of histogram bins.
-        percentile_cutoff: If set (e.g. ``99``), values above this percentile
-            across all groups are dropped before plotting. Useful for removing
-            long idle periods that compress the histogram scale.
+        percentile_cutoff: If set (e.g. ``95``), values above this percentile
+            across all groups are dropped before plotting.
         ax_size: Figure size ``(width, height)`` in inches.
     """
     fig, ax = plt.subplots(figsize=ax_size)
@@ -71,34 +75,48 @@ def plot_inter_trigger_interval(
             itv = itv[itv <= cutoff]
         n_kept = len(itv)
         color = color_map[hv]
-        ax.hist(itv, bins=bins, color=color, alpha=0.5, density=True)
 
-        # Percentile markers: dashed lines at 5/25/50/75 %
-        pct_styles = {5: (":", 0.7), 25: ("-.", 0.8), 50: ("--", 1.0), 75: ("-.", 0.8)}
-        for pct, (ls, alpha) in pct_styles.items():
-            pv = float(np.percentile(itv, pct))
-            ax.axvline(pv, color=color, linestyle=ls, linewidth=1.0, alpha=alpha)
+        ax.hist(itv, bins=bins, color=color, alpha=0.45, density=True)
 
         mean_val = float(np.mean(itv))
-        p50 = float(np.percentile(itv, 50))
-        label = (
-            f"{hv if hv is not None else 'all'}  "
-            f"(mean={mean_val:.1f} s, median={p50:.1f} s, n={n_kept}"
-        )
-        if cutoff is not None and n_kept < n_total:
-            label += f", {n_total - n_kept} outliers removed"
-        label += ")"
-        legend_handles.append(Line2D([0], [0], color=color, linewidth=2, label=label))
+        p25, p50, p75 = float(np.percentile(itv, 25)), float(np.percentile(itv, 50)), float(np.percentile(itv, 75))
 
+        # IQR shaded band
+        ax.axvspan(p25, p75, color=color, alpha=0.12)
+        # Median — solid
+        ax.axvline(p50, color=color, linestyle="-", linewidth=1.5)
+        # Mean — dashed
+        ax.axvline(mean_val, color=color, linestyle="--", linewidth=1.5)
+
+        label = f"{hv if hv is not None else 'all'}"
+        label += f"\n  mean={mean_val:.0f} s  median={p50:.0f} s  IQR=[{p25:.0f}, {p75:.0f}] s  n={n_kept}"
+        if cutoff is not None and n_kept < n_total:
+            label += f"  ({n_total - n_kept} clipped)"
+        legend_handles.append(Patch(facecolor=color, alpha=0.6, label=label))
+
+    # Shared legend entries for line styles
+    legend_handles += [
+        Line2D([0], [0], color="grey", linestyle="-", linewidth=1.5, label="median"),
+        Line2D([0], [0], color="grey", linestyle="--", linewidth=1.5, label="mean"),
+        Patch(facecolor="grey", alpha=0.2, label="IQR (25–75th pct)"),
+    ]
+
+    title = "Inter-trigger interval distribution"
+    if cutoff is not None:
+        title += f"  [>{percentile_cutoff:.0f}th pct clipped at {cutoff:.0f} s]"
+    ax.set_title(title)
     ax.set_xlabel("Inter-trigger interval (s)")
     ax.set_ylabel("Density")
-    title = "Inter-trigger interval distribution  (lines: 5/25/50/75th percentile)"
-    if cutoff is not None:
-        title += f"\n>{percentile_cutoff}th percentile removed (cutoff={cutoff:.1f} s)"
-    ax.set_title(title)
     ax.grid(True, alpha=0.3, axis="y")
+
     if legend_handles:
-        ax.legend(handles=legend_handles, title=hue_by, bbox_to_anchor=(1.02, 1), loc="upper left")
+        ax.legend(
+            handles=legend_handles,
+            title=hue_by,
+            loc="upper right",
+            framealpha=0.9,
+            fontsize=8,
+        )
 
     fig.tight_layout()
     return fig
