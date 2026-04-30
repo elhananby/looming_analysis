@@ -7,7 +7,6 @@ from typing import Optional
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.figure import Figure
-from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
 from .._types import DT_SECONDS, Response
@@ -328,18 +327,15 @@ def plot_response_latency(
         ax.axvline(p50, color=color, linestyle="-", linewidth=1.5)
         ax.axvline(mean_val, color=color, linestyle="--", linewidth=1.5)
 
-        label = f"{hv if hv is not None else 'all'}"
-        label += f"\n  mean={mean_val:.0f} ms  median={p50:.0f} ms  IQR=[{p25:.0f}, {p75:.0f}] ms  n={latencies.size}"
+        name = hv if hv is not None else "all"
+        label = f"{name}  (n={latencies.size},  mean={mean_val:.0f},  med={p50:.0f},  IQR=[{p25:.0f}–{p75:.0f}] ms)"
         legend_handles.append(Patch(facecolor=color, alpha=0.6, label=label))
 
-    legend_handles += [
-        Line2D([0], [0], color="grey", linestyle="-", linewidth=1.5, label="median"),
-        Line2D([0], [0], color="grey", linestyle="--", linewidth=1.5, label="mean"),
-        Patch(facecolor="grey", alpha=0.2, label="IQR (25–75th pct)"),
-    ]
-
     qualifier = "responsive trials" if responsive_only else "all trials"
-    ax.set_title(f"Response latency distribution  ({qualifier})")
+    ax.set_title(
+        f"Response latency  ({qualifier})"
+        "  |  — median   – – mean   ▒ IQR"
+    )
     ax.set_xlabel("Latency: stimulus onset → peak (ms)")
     ax.set_ylabel("Density")
     ax.grid(True, alpha=0.3, axis="y")

@@ -7,7 +7,6 @@ from typing import Optional
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
-from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
 
 from .._types import Response
@@ -88,22 +87,19 @@ def plot_inter_trigger_interval(
         # Mean — dashed
         ax.axvline(mean_val, color=color, linestyle="--", linewidth=1.5)
 
-        label = f"{hv if hv is not None else 'all'}"
-        label += f"\n  mean={mean_val:.0f} s  median={p50:.0f} s  IQR=[{p25:.0f}, {p75:.0f}] s  n={n_kept}"
+        name = hv if hv is not None else "all"
+        label = f"{name}  (n={n_kept},  mean={mean_val:.0f},  med={p50:.0f},  IQR=[{p25:.0f}–{p75:.0f}] s"
         if cutoff is not None and n_kept < n_total:
-            label += f"  ({n_total - n_kept} clipped)"
+            label += f",  {n_total - n_kept} clipped"
+        label += ")"
         legend_handles.append(Patch(facecolor=color, alpha=0.6, label=label))
 
-    # Shared legend entries for line styles
-    legend_handles += [
-        Line2D([0], [0], color="grey", linestyle="-", linewidth=1.5, label="median"),
-        Line2D([0], [0], color="grey", linestyle="--", linewidth=1.5, label="mean"),
-        Patch(facecolor="grey", alpha=0.2, label="IQR (25–75th pct)"),
-    ]
-
-    title = "Inter-trigger interval distribution"
+    title = (
+        "Inter-trigger interval distribution"
+        "  |  — median   – – mean   ▒ IQR"
+    )
     if cutoff is not None:
-        title += f"  [>{percentile_cutoff:.0f}th pct clipped at {cutoff:.0f} s]"
+        title += f"\n>{percentile_cutoff:.0f}th pct clipped at {cutoff:.0f} s"
     ax.set_title(title)
     ax.set_xlabel("Inter-trigger interval (s)")
     ax.set_ylabel("Density")
