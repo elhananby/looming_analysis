@@ -19,7 +19,7 @@ def plot_inter_trigger_interval(
     hue_by: Optional[str] = "group",
     bins: int = 50,
     percentile_cutoff: Optional[float] = None,
-    inset_max_s: float = 10.0,
+    inset_max_s: float = 30.0,
     ax_size: tuple[float, float] = (8, 4),
 ) -> Figure:
     """Histogram of inter-trigger intervals (time between consecutive triggers).
@@ -95,11 +95,9 @@ def plot_inter_trigger_interval(
         label += ")"
         legend_handles.append(Patch(facecolor=color, alpha=0.6, label=label))
 
-    # Inset: zoom into 0–inset_max_s to show refractory-period region.
-    # Re-collect all per-group raw arrays (before cutoff) for the inset.
-    # [x0, y0, width, height] in axes-fraction coordinates.
+    # Inset: zoom into 0–inset_max_s to show the refractory-period region.
+    # Always rendered; uses unclipped data so short intervals are never hidden.
     ax_ins = ax.inset_axes([0.55, 0.35, 0.42, 0.58])
-    has_inset_data = False
     for hv in hue_vals:
         subset = [
             r for r in responses
@@ -116,17 +114,13 @@ def plot_inter_trigger_interval(
             continue
         color = color_map[hv]
         ax_ins.hist(itv_zoom, bins=20, color=color, alpha=0.55, density=True)
-        has_inset_data = True
-    if has_inset_data:
-        ax_ins.set_xlim(0, inset_max_s)
-        ax_ins.set_xlabel(f"0–{inset_max_s:.0f} s", fontsize=7)
-        ax_ins.tick_params(labelsize=6)
-        ax_ins.set_yticks([])
-        ax_ins.grid(True, alpha=0.3, axis="y")
-        for spine in ("top", "right"):
-            ax_ins.spines[spine].set_visible(False)
-    else:
-        ax_ins.set_visible(False)
+    ax_ins.set_xlim(0, inset_max_s)
+    ax_ins.set_xlabel(f"0–{inset_max_s:.0f} s", fontsize=7)
+    ax_ins.tick_params(labelsize=6)
+    ax_ins.set_yticks([])
+    ax_ins.grid(True, alpha=0.3, axis="y")
+    for spine in ("top", "right"):
+        ax_ins.spines[spine].set_visible(False)
 
     title = (
         "Inter-trigger interval distribution"
