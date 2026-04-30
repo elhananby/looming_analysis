@@ -244,6 +244,84 @@ def plot_peak_aligned_traces(
     return fig
 
 
+def plot_latency_by_direction(
+    responses: list[Response],
+    *,
+    hue_by: Optional[str] = "group",
+    fallback_window_ms: float = 200.0,
+    ax_size: tuple[float, float] = (7, 4),
+) -> Figure:
+    """Mean ± SEM response latency as a function of absolute stimulus direction.
+
+    Signed stimulus offsets are folded to their absolute value so that −45°
+    and +45° are treated as the same condition.  Only responsive trials with a
+    detected saccade (``saccade_peak_time_ms`` finite) are included.
+
+    Args:
+        responses: Response list.  ``classify_responsiveness`` should have been
+            called first.  ``peak_latency_ms`` is computed automatically if not
+            already present.
+        hue_by: Field mapped to line/marker colors.
+        fallback_window_ms: Passed to ``compute_peak_latency`` if needed.
+        ax_size: Figure size ``(width, height)`` in inches.
+    """
+    compute_peak_latency(responses, fallback_window_ms=fallback_window_ms)
+
+    # Restrict to responsive trials with a valid saccade peak.
+    subset = [
+        r for r in responses
+        if r.get("is_responsive")
+        and r.get("saccade_peak_time_ms") is not None
+        and not np.isnan(float(r["saccade_peak_time_ms"]))
+        and r.get("stimulus_offset_deg") is not None
+        and r.get("peak_latency_ms") is not None
+        and not np.isnan(float(r["peak_latency_ms"]))
+    ]
+
+    fig, ax = plt.subplots(figsize=ax_size)
+    color_map = build_hue_colormap(responses, hue_by)
+    hue_vals: list = [None] if hue_by is None else unique_values(responses, hue_by)
+
+    for hv in hue_vals:
+        group_data = (
+            subset if hue_by is None
+            else [r for r in subset if r.get(hue_by) == hv]
+        )
+        if not group_data:
+            continue
+
+        # Bin by absolute stimulus direction.
+        abs_offsets = sorted({abs(float(r["stimulus_offset_deg"])) for r in group_data})
+        xs, means, sems = [], [], []
+        for offset in abs_offsets:
+            vals = np.array([
+                float(r["peak_latency_ms"]) for r in group_data
+                if abs(float(r["stimulus_offset_deg"])) == offset
+            ])
+            xs.append(offset)
+            means.append(float(np.mean(vals)))
+            sems.append(float(np.std(vals) / np.sqrt(len(vals))))
+
+        xs = np.array(xs)
+        means = np.array(means)
+        sems = np.array(sems)
+        color = color_map.get(hv, "steelblue")
+        label = f"{hv} (n={len(group_data)})" if hv is not None else f"n={len(group_data)}"
+        ax.plot(xs, means, marker="o", color=color, label=label)
+        ax.fill_between(xs, means - sems, means + sems, alpha=0.2, color=color)
+        ax.errorbar(xs, means, yerr=sems, fmt="none", color=color, capsize=4)
+
+    ax.set_xlabel("Stimulus direction (°, absolute)")
+    ax.set_ylabel("Response latency (ms)")
+    ax.set_title("Response latency vs stimulus direction  (responsive trials, mean ± SEM)")
+    ax.grid(True, alpha=0.3)
+    if any(hv is not None for hv in hue_vals):
+        ax.legend(title=hue_by, framealpha=0.9, fontsize=8)
+
+    fig.tight_layout()
+    return fig
+
+
 def _suptitle(fig: Figure, row_by, col_by, hue_by) -> None:
     parts = ["Peak-aligned angular velocity"]
     dims = []

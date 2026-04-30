@@ -125,6 +125,7 @@ def run_from_config(
             percentile_cutoff=plots.get("iti_percentile_cutoff", None),
         ),
         "response-latency.png": result.plot_response_latency(hue_by=hue_by),
+        "latency-by-direction.png": result.plot_latency_by_direction(hue_by=hue_by),
         "peak-aligned-angular-velocity.png": result.plot_peak_aligned_traces(
             col_by=col_by,
             hue_by=hue_by,
