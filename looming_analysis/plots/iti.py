@@ -72,9 +72,19 @@ def plot_inter_trigger_interval(
         n_kept = len(itv)
         color = color_map[hv]
         ax.hist(itv, bins=bins, color=color, alpha=0.5, density=True)
+
+        # Percentile markers: dashed lines at 5/25/50/75 %
+        pct_styles = {5: (":", 0.7), 25: ("-.", 0.8), 50: ("--", 1.0), 75: ("-.", 0.8)}
+        for pct, (ls, alpha) in pct_styles.items():
+            pv = float(np.percentile(itv, pct))
+            ax.axvline(pv, color=color, linestyle=ls, linewidth=1.0, alpha=alpha)
+
         mean_val = float(np.mean(itv))
-        ax.axvline(mean_val, color=color, linestyle="--", linewidth=1.5)
-        label = f"{hv if hv is not None else 'all'}  (mean={mean_val:.1f} s, n={n_kept}"
+        p50 = float(np.percentile(itv, 50))
+        label = (
+            f"{hv if hv is not None else 'all'}  "
+            f"(mean={mean_val:.1f} s, median={p50:.1f} s, n={n_kept}"
+        )
         if cutoff is not None and n_kept < n_total:
             label += f", {n_total - n_kept} outliers removed"
         label += ")"
@@ -82,9 +92,9 @@ def plot_inter_trigger_interval(
 
     ax.set_xlabel("Inter-trigger interval (s)")
     ax.set_ylabel("Density")
-    title = "Inter-trigger interval distribution"
+    title = "Inter-trigger interval distribution  (lines: 5/25/50/75th percentile)"
     if cutoff is not None:
-        title += f"  (>{percentile_cutoff}th percentile removed, cutoff={cutoff:.1f} s)"
+        title += f"\n>{percentile_cutoff}th percentile removed (cutoff={cutoff:.1f} s)"
     ax.set_title(title)
     ax.grid(True, alpha=0.3, axis="y")
     if legend_handles:

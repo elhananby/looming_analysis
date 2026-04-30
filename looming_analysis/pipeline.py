@@ -15,6 +15,7 @@ from .plots import (
     plot_heading_changes,
     plot_heading_traces,
     plot_inter_trigger_interval,
+    plot_peak_aligned_traces,
     plot_peak_velocity,
     plot_responses,
     plot_responses_by_responsiveness,
@@ -23,6 +24,7 @@ from .plots import (
     plot_turn_proportions,
     plot_heading_change_comparison,
 )
+from .plots.peak_aligned import compute_peak_latency
 from .responsiveness import classify_responsiveness, compute_turn_direction
 
 
@@ -64,8 +66,15 @@ class AnalysisResult:
     def plot_inter_trigger_interval(self, **kwargs) -> Figure:
         return plot_inter_trigger_interval(self.responses, **kwargs)
 
+    def plot_peak_aligned_traces(self, **kwargs) -> Figure:
+        return plot_peak_aligned_traces(self.responses, **kwargs)
+
     def plot_screen_position_effect(self, **kwargs) -> Figure:
         return plot_screen_position_effect(self.responses, **kwargs)
+
+    def compute_peak_latency(self, **kwargs) -> "AnalysisResult":
+        compute_peak_latency(self.responses, **kwargs)
+        return self
 
 
 def normalize_file_selection(
