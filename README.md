@@ -44,7 +44,8 @@ containing:
 | `responsiveness-rates.png` | Fraction responsive per condition |
 | `peak-angular-velocity.png` | Peak \|ω\| distribution, faceted by `row_by` |
 | `turn-proportions.png` | Left/right turn proportions per condition |
-| `inter-trigger-interval.png` | Histogram of time between consecutive triggers |
+| `inter-trigger-interval.png` | Histogram of time between consecutive triggers (with 5/25/50/75th percentile lines) |
+| `peak-aligned-angular-velocity.png` | Mean \|ω\| traces aligned to each trial's response peak |
 | `screen-position-effect.png` | Peak and mean \|ω\| vs within-screen x position |
 | `*.json` / `*.toml` | Copies of the config files used |
 
@@ -76,6 +77,7 @@ trials = result.to_dataframe(kind="scalar")
 traces = result.to_dataframe(kind="long")
 
 fig = result.plot_traces(hue_by="stimulus_offset_deg")
+fig = result.plot_peak_aligned_traces(hue_by="group")
 fig = result.plot_inter_trigger_interval(hue_by="group")
 fig = result.plot_screen_position_effect(hue_by="group")
 ```
@@ -150,6 +152,12 @@ responsive_only = false
 
 # Drop the top N% of ITI values from the histogram (e.g. 99 removes the top 1%).
 # iti_percentile_cutoff = 99
+
+# Half-width (ms) of the window around each trial's peak for the peak-aligned plot.
+peak_aligned_half_window_ms = 100
+
+# Half-width (ms) of the fallback search window (used for non-responsive trials).
+peak_aligned_fallback_window_ms = 200
 ```
 
 See `examples/analysis.example.toml` for the full annotated reference.
@@ -219,6 +227,34 @@ Five heading change metrics are computed per trial and stored for comparison:
 Use `result.plot_heading_change_comparison()` to visualise all five side-by-side,
 split by group and responsiveness.
 
+## Peak-Aligned Traces
+
+`plot_peak_aligned_traces` aligns each trial to its own response peak rather
+than to stimulus onset.  This removes latency jitter and gives a cleaner view
+of the response waveform shape.
+
+**Peak selection per trial:**
+
+| Trial type | Peak used |
+|---|---|
+| Saccade detected (`saccade_peak_time_ms` set) | That saccade peak |
+| No saccade detected | argmax of `\|ω\|` within `±fallback_window_ms` of `end_expansion_time` |
+| Window empty / all NaN | `end_expansion_time` |
+
+`±half_window_ms` (default 100 ms) is extracted around the peak and
+NaN-padded when the trial doesn't have enough data at the edges.  All traces
+share a common time axis of `−half_window_ms … +half_window_ms`.
+
+As a side effect, `peak_latency_ms` is added to every response dict (time from
+stimulus onset to the peak used for alignment).  This field appears in
+`to_dataframe()` output and can be used for downstream latency analysis.
+
+```python
+# Compute latency without plotting
+result.compute_peak_latency()
+trials = result.to_dataframe()  # includes peak_latency_ms column
+```
+
 ## Standard Plots
 
 ```python
@@ -230,6 +266,10 @@ result.plot_responsiveness_rates(col_by="stimulus_offset_deg", hue_by="group")
 result.plot_peak_velocity(col_by="stimulus_offset_deg", hue_by="group", row_by="is_responsive")
 result.plot_turn_proportions(x_by="stimulus_offset_deg", col_by="group")
 result.plot_heading_change_comparison(group_by="group")
+
+# Peak-aligned traces (aligned to saccade peak or |ω| argmax fallback)
+result.plot_peak_aligned_traces(col_by="stimulus_offset_deg", hue_by="group", row_by="is_responsive")
+result.plot_peak_aligned_traces(hue_by="group", responsive_only=True, half_window_ms=150)
 
 # Diagnostic plots
 result.plot_inter_trigger_interval(hue_by="group", percentile_cutoff=99)

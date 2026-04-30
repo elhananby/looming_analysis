@@ -80,3 +80,14 @@ responsive_only = false
 # Useful for removing long idle periods that compress the x-axis.
 # Leave unset or comment out to show all values.
 # iti_percentile_cutoff = 99
+
+# ── Peak-aligned traces ───────────────────────────────────────────────────────
+# Half-width (ms) of the window extracted around each trial's response peak.
+# The peak is the saccade detected by classify_responsiveness; for trials
+# without a detected saccade the argmax of |ω| in the detection window is used.
+# Default 100 ms gives a ±100 ms (200 ms total) window centred on the peak.
+peak_aligned_half_window_ms = 100
+
+# Half-width (ms) of the search window around end_expansion_time used to find
+# a fallback peak for non-responsive trials.
+peak_aligned_fallback_window_ms = 200

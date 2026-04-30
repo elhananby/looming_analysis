@@ -122,7 +122,11 @@ def run_from_config(
             percentile_cutoff=plots.get("iti_percentile_cutoff", None),
         ),
         "peak-aligned-angular-velocity.png": result.plot_peak_aligned_traces(
-            col_by=col_by, hue_by=hue_by, row_by=row_by
+            col_by=col_by,
+            hue_by=hue_by,
+            row_by=row_by,
+            half_window_ms=plots.get("peak_aligned_half_window_ms", 100),
+            fallback_window_ms=plots.get("peak_aligned_fallback_window_ms", 200),
         ),
         "screen-position-effect.png": result.plot_screen_position_effect(
             hue_by=hue_by,
