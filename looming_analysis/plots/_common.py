@@ -66,13 +66,28 @@ def iter_facets(
 def build_hue_colormap(
     responses: list[Response],
     hue_by: Optional[str],
+    *,
+    light: bool = False,
 ) -> dict[Any, Any]:
-    """Build a {hue_value: rgba-color} mapping. Single-entry when hue_by is None."""
+    """Build a {hue_value: rgba-color} mapping. Single-entry when hue_by is None.
+
+    Uses discrete tab10 indices so successive groups get maximally distinct
+    colours (blue, orange, green, red, purple, …).  Pass ``light=True`` to
+    get washed-out variants suitable for a secondary series (e.g. non-responsive).
+    """
     if hue_by is None:
-        return {None: "steelblue"}
+        base = np.array(plt.cm.tab10(0))
+        if light:
+            base = np.clip(base * 0.4 + 0.6, 0, 1)
+        return {None: tuple(base)}
     hue_vals = unique_values(responses, hue_by)
-    colors = plt.cm.tab10(np.linspace(0, 0.9, max(len(hue_vals), 1)))
-    return dict(zip(hue_vals, colors))
+    result = {}
+    for i, hv in enumerate(hue_vals):
+        color = np.array(plt.cm.tab10(i % 10))
+        if light:
+            color = np.clip(color * 0.4 + 0.6, 0, 1)
+        result[hv] = tuple(color)
+    return result
 
 
 def prepare_ang_vel(

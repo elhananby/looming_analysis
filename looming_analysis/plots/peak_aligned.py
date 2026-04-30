@@ -327,9 +327,10 @@ def plot_latency_by_direction(
         parts["cmedians"].set_color(color)
         parts["cmedians"].set_linewidth(1.5)
 
-        # Overlay mean marker.
+        # Overlay mean marker with connecting line.
         means = [float(np.mean(v)) for v in data_per_pos]
-        ax.scatter(positions, means, color=color, zorder=3, s=30, marker="D",
+        ax.plot(positions, means, color=color, linewidth=1.2, zorder=3, alpha=0.8)
+        ax.scatter(positions, means, color=color, zorder=4, s=35, marker="D",
                    label=f"{hv if hv is not None else 'all'} (n={len(group_data)})")
 
     ax.set_xticks(range(n_offsets))
