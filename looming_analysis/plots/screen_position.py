@@ -59,8 +59,9 @@ def plot_screen_position_effect(
     ]
 
     fig, axes = plt.subplots(
-        1, len(metrics),
-        figsize=(ax_size[0] * len(metrics), ax_size[1]),
+        len(metrics), 1,
+        figsize=(ax_size[0], ax_size[1] * len(metrics)),
+        sharex=True,
         sharey=False,
     )
 
@@ -111,17 +112,18 @@ def plot_screen_position_effect(
 
         ax.set_xticks(x_positions)
         ax.set_xticklabels(x_labels, rotation=45, ha="right", fontsize=8)
-        ax.set_xlabel(f"Within-screen x position (px,  bin width={int(bin_width)}px)")
         ax.set_ylabel(ylabel)
         ax.grid(True, alpha=0.3, axis="y")
+
+    axes[-1].set_xlabel(f"Within-screen x position (px,  bin width={int(bin_width)}px)")
 
     if hue_by is not None:
         legend_handles = [
             Patch(facecolor=color_map[hv], alpha=0.7, label=str(hv))
             for hv in hue_vals
         ]
-        axes[-1].legend(handles=legend_handles, title=hue_by,
-                        bbox_to_anchor=(1.02, 1), loc="upper left")
+        axes[0].legend(handles=legend_handles, title=hue_by,
+                       bbox_to_anchor=(1.02, 1), loc="upper left")
 
     fig.suptitle(
         f"Angular velocity vs screen position  "
