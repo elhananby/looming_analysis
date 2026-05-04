@@ -11,12 +11,24 @@ uv sync --dev
 
 ## Quickstart
 
-For routine runs, use config files:
+For routine runs, keep one reusable JSON file per experimental group, then pick
+the groups to compare when launching the analysis:
 
 ```bash
 looming-analysis \
   --files examples/files.example.json \
   --files examples/empty-split.files.example.json \
+  --analysis examples/analysis.example.toml \
+  --output-root outputs
+```
+
+To run a different comparison, reuse the same group file and swap only the other
+`--files` argument:
+
+```bash
+looming-analysis \
+  --files groups/CS.json \
+  --files groups/DNp03xKir.json \
   --analysis examples/analysis.example.toml \
   --output-root outputs
 ```
@@ -104,7 +116,8 @@ fig = result.plot_responsiveness_rates(col_by="stimulus_offset_deg", hue_by="gro
 ### Group file JSON
 
 For reusable group definitions, create one JSON file per group. The `group`
-field is the label used in plots and output folder names.
+field is the label used in plots, trial tables, and output folder names. The
+`files` list contains only recordings for that group.
 
 ```json
 {
@@ -121,6 +134,9 @@ looming-analysis \
   --files groups/Empty-Split.json \
   --analysis examples/analysis.example.toml
 ```
+
+Each `--files` argument is loaded as one group, and all selected groups are
+merged for the run. Group names must be unique across the selected files.
 
 The older combined format is still supported:
 
