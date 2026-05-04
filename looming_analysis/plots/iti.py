@@ -10,7 +10,7 @@ from matplotlib.figure import Figure
 from matplotlib.patches import Patch
 
 from .._types import Response
-from ._common import build_hue_colormap, unique_values
+from ._common import add_stats_box, build_hue_colormap, unique_values
 
 
 def plot_inter_trigger_interval(
@@ -56,6 +56,7 @@ def plot_inter_trigger_interval(
             cutoff = float(np.percentile(all_itv, percentile_cutoff))
 
     legend_handles = []
+    stats_lines: list[str] = []
     for hv in hue_vals:
         subset = [
             r for r in responses
@@ -89,11 +90,15 @@ def plot_inter_trigger_interval(
         ax.axvline(mean_val, color=color, linestyle="--", linewidth=1.5)
 
         name = hv if hv is not None else "all"
-        label = f"{name}  (n={n_kept},  mean={mean_val:.0f},  med={p50:.0f},  IQR=[{p25:.0f}–{p75:.0f}] s"
+        label = str(name)
+        stats = (
+            f"{name}: n={n_kept}, mean={mean_val:.0f}, med={p50:.0f}, "
+            f"IQR={p25:.0f}-{p75:.0f} s"
+        )
         if cutoff is not None and n_kept < n_total:
-            label += f",  {n_total - n_kept} clipped"
-        label += ")"
+            stats += f", clipped={n_total - n_kept}"
         legend_handles.append(Patch(facecolor=color, alpha=0.6, label=label))
+        stats_lines.append(stats)
 
     # Inset: zoom into 0–inset_max_s to show the refractory-period region.
     # Always rendered; uses unclipped data so short intervals are never hidden.
@@ -132,14 +137,13 @@ def plot_inter_trigger_interval(
     ax.set_xlabel("Inter-trigger interval (s)")
     ax.set_ylabel("Density")
     ax.grid(True, alpha=0.3, axis="y")
+    add_stats_box(ax, stats_lines, loc="upper left")
 
     if legend_handles:
         ax.legend(
             handles=legend_handles,
             title=hue_by,
-            loc="upper center",
-            bbox_to_anchor=(0.5, -0.18),
-            ncol=len(legend_handles),
+            loc="upper right",
             framealpha=0.9,
             fontsize=8,
         )

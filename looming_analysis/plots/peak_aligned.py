@@ -10,7 +10,13 @@ from matplotlib.figure import Figure
 from matplotlib.patches import Patch
 
 from .._types import DT_SECONDS, Response
-from ._common import annotate_facet, build_hue_colormap, iter_facets, unique_values
+from ._common import (
+    add_stats_box,
+    annotate_facet,
+    build_hue_colormap,
+    iter_facets,
+    unique_values,
+)
 
 
 def _get_peak_time_s(
@@ -390,26 +396,36 @@ def plot_response_latency(
             ``peak_latency_ms`` is not already set.
         ax_size: Figure size ``(width, height)`` in inches.
     """
-    # Ensure peak_latency_ms is present.
-    compute_peak_latency(responses, fallback_window_ms=fallback_window_ms)
+    plot_responses = responses
+    if responsive_only:
+        plot_responses = [
+            r
+            for r in responses
+            if r.get("is_responsive")
+            and r.get("saccade_peak_time_ms") is not None
+            and not np.isnan(float(r["saccade_peak_time_ms"]))
+        ]
+
+    needs_latency = [
+        r
+        for r in plot_responses
+        if r.get("peak_latency_ms") is None
+        or np.isnan(float(r["peak_latency_ms"]))
+    ]
+    if needs_latency:
+        compute_peak_latency(needs_latency, fallback_window_ms=fallback_window_ms)
 
     fig, ax = plt.subplots(figsize=ax_size)
-    color_map = build_hue_colormap(responses, hue_by)
-    hue_vals = unique_values(responses, hue_by) if hue_by else [None]
+    color_map = build_hue_colormap(plot_responses, hue_by)
+    hue_vals = unique_values(plot_responses, hue_by) if hue_by else [None]
 
     legend_handles = []
+    stats_lines: list[str] = []
     for hv in hue_vals:
         subset = [
-            r for r in responses
+            r for r in plot_responses
             if (hue_by is None or r.get(hue_by) == hv)
         ]
-        if responsive_only:
-            subset = [
-                r for r in subset
-                if r.get("is_responsive")
-                and r.get("saccade_peak_time_ms") is not None
-                and not np.isnan(float(r["saccade_peak_time_ms"]))
-            ]
         latencies = np.array(
             [float(r["peak_latency_ms"]) for r in subset
              if r.get("peak_latency_ms") is not None
@@ -430,8 +446,11 @@ def plot_response_latency(
         ax.axvline(mean_val, color=color, linestyle="--", linewidth=1.5)
 
         name = hv if hv is not None else "all"
-        label = f"{name}  (n={latencies.size},  mean={mean_val:.0f},  med={p50:.0f},  IQR=[{p25:.0f}–{p75:.0f}] ms)"
-        legend_handles.append(Patch(facecolor=color, alpha=0.6, label=label))
+        legend_handles.append(Patch(facecolor=color, alpha=0.6, label=str(name)))
+        stats_lines.append(
+            f"{name}: n={latencies.size}, mean={mean_val:.0f}, "
+            f"med={p50:.0f}, IQR={p25:.0f}-{p75:.0f} ms"
+        )
 
     qualifier = "responsive trials" if responsive_only else "all trials"
     ax.set_title(
@@ -441,13 +460,12 @@ def plot_response_latency(
     ax.set_xlabel("Latency: stimulus onset → peak (ms)")
     ax.set_ylabel("Density")
     ax.grid(True, alpha=0.3, axis="y")
+    add_stats_box(ax, stats_lines, loc="upper left")
     if legend_handles:
         ax.legend(
             handles=legend_handles,
             title=hue_by,
-            loc="upper center",
-            bbox_to_anchor=(0.5, -0.18),
-            ncol=len(legend_handles),
+            loc="upper right",
             framealpha=0.9,
             fontsize=8,
         )

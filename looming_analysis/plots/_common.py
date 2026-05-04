@@ -11,6 +11,36 @@ import numpy as np
 from .._types import Response
 
 
+def add_stats_box(ax, lines: list[str], *, loc: str = "upper left") -> None:
+    """Render compact per-group summary stats without expanding the axes."""
+    if not lines:
+        return
+
+    positions = {
+        "upper left": (0.02, 0.98, "left", "top"),
+        "upper right": (0.98, 0.98, "right", "top"),
+        "lower left": (0.02, 0.02, "left", "bottom"),
+        "lower right": (0.98, 0.02, "right", "bottom"),
+    }
+    x, y, ha, va = positions[loc]
+    ax.text(
+        x,
+        y,
+        "\n".join(lines),
+        transform=ax.transAxes,
+        ha=ha,
+        va=va,
+        fontsize=7,
+        family="monospace",
+        bbox={
+            "boxstyle": "round,pad=0.3",
+            "facecolor": "white",
+            "alpha": 0.75,
+            "edgecolor": "0.8",
+        },
+    )
+
+
 def unique_values(responses: list[Response], key: Optional[str]) -> list[Any]:
     """Return sorted unique values for `key` across responses (skips None/missing)."""
     if key is None:
