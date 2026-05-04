@@ -16,6 +16,7 @@ For routine runs, use config files:
 ```bash
 looming-analysis \
   --files examples/files.example.json \
+  --files examples/empty-split.files.example.json \
   --analysis examples/analysis.example.toml \
   --output-root outputs
 ```
@@ -24,13 +25,14 @@ Append a label to the output folder name:
 
 ```bash
 looming-analysis \
-  --files examples/CS_vs_J64xKir2.1_all.json \
+  --files examples/files.example.json \
+  --files examples/empty-split.files.example.json \
   --analysis examples/analysis.toml \
   --output-root outputs \
   --suffix responsive_only
 ```
 
-This creates a timestamped folder like `outputs/20260427_153000-CS_J64xKir2.1(w+)_responsive_only/`
+This creates a timestamped folder like `outputs/20260427_153000-CS_Empty-Split_responsive_only/`
 containing:
 
 | File | Contents |
@@ -99,9 +101,28 @@ fig = result.plot_responsiveness_rates(col_by="stimulus_offset_deg", hue_by="gro
 
 ## Config Files
 
-### `files.json`
+### Group file JSON
 
-Maps group names to lists of `.braidz` file paths.
+For reusable group definitions, create one JSON file per group. The `group`
+field is the label used in plots and output folder names.
+
+```json
+{
+  "group": "CS",
+  "files": ["/path/to/cs_1.braidz", "/path/to/cs_2.braidz"]
+}
+```
+
+Pass each group file with a repeated `--files` flag:
+
+```bash
+looming-analysis \
+  --files groups/CS.json \
+  --files groups/Empty-Split.json \
+  --analysis examples/analysis.example.toml
+```
+
+The older combined format is still supported:
 
 ```json
 {
@@ -112,7 +133,7 @@ Maps group names to lists of `.braidz` file paths.
 }
 ```
 
-Use `"files"` instead of `"groups"` for a single unlabelled condition:
+Use `"files"` without `"group"` for a single unlabelled condition:
 
 ```json
 { "files": ["/path/to/recording.braidz"] }

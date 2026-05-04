@@ -8,14 +8,17 @@ import shutil
 import tomllib
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 from .config import AnalysisConfig, ResponsivenessConfig
 from .pipeline import AnalysisResult, filter_by_iti, run_analysis
 
 
-def load_files_config(path: str | Path) -> dict[str, list[str]]:
-    """Load a JSON files config with either `groups` or `files`."""
+FilesConfigPath = str | Path
+
+
+def load_files_config(path: FilesConfigPath) -> dict[str, list[str]]:
+    """Load a JSON files config with `groups`, `group` + `files`, or `files`."""
     config_path = Path(path)
     data = json.loads(config_path.read_text(encoding="utf-8"))
     if "groups" in data:
@@ -23,9 +26,36 @@ def load_files_config(path: str | Path) -> dict[str, list[str]]:
             str(group): [str(p) for p in paths]
             for group, paths in data["groups"].items()
         }
+    if "group" in data and "files" in data:
+        return {str(data["group"]): [str(p) for p in data["files"]]}
     if "files" in data:
         return {"experiment": [str(p) for p in data["files"]]}
-    raise ValueError("Files config must contain either 'groups' or 'files'.")
+    raise ValueError(
+        "Files config must contain 'groups', 'group' with 'files', or 'files'."
+    )
+
+
+def load_files_configs(paths: Sequence[FilesConfigPath]) -> dict[str, list[str]]:
+    """Load and merge one or more files configs."""
+    if not paths:
+        raise ValueError("At least one files config is required.")
+
+    merged: dict[str, list[str]] = {}
+    for path in paths:
+        file_groups = load_files_config(path)
+        for group, files in file_groups.items():
+            if group in merged:
+                raise ValueError(f"Duplicate group name in files configs: {group}")
+            merged[group] = files
+    return merged
+
+
+def _normalize_files_config_paths(
+    files_config: FilesConfigPath | Sequence[FilesConfigPath],
+) -> list[FilesConfigPath]:
+    if isinstance(files_config, (str, Path)):
+        return [files_config]
+    return list(files_config)
 
 
 def load_analysis_config(path: str | Path) -> dict[str, Any]:
@@ -57,14 +87,15 @@ def build_output_dir(
 
 
 def run_from_config(
-    files_config: str | Path,
+    files_config: FilesConfigPath | Sequence[FilesConfigPath],
     analysis_config: str | Path,
     *,
     output_root: str | Path = "outputs",
     suffix: str | None = None,
 ) -> Path:
     """Run analysis from config files and save outputs."""
-    file_groups = load_files_config(files_config)
+    files_config_paths = _normalize_files_config_paths(files_config)
+    file_groups = load_files_configs(files_config_paths)
     config = load_analysis_config(analysis_config)
     output_dir = build_output_dir(output_root, file_groups, suffix=suffix)
     output_dir.mkdir(parents=True, exist_ok=False)
@@ -140,7 +171,8 @@ def run_from_config(
     for filename, fig in figures.items():
         fig.savefig(output_dir / filename, dpi=150, bbox_inches="tight")
 
-    shutil.copy2(files_config, output_dir / Path(files_config).name)
+    for path in files_config_paths:
+        shutil.copy2(path, output_dir / Path(path).name)
     shutil.copy2(analysis_config, output_dir / Path(analysis_config).name)
     return output_dir
 
@@ -149,7 +181,7 @@ class _VerboseParser(argparse.ArgumentParser):
     def error(self, message: str) -> None:
         self.print_usage()
         required = {
-            "--files": "a JSON file mapping group names to lists of recording paths",
+            "--files": "a JSON file with recording paths; repeat for reusable group files",
             "--analysis": "a TOML file with analysis parameters (thresholds, window sizes, etc.)",
         }
         for flag, desc in required.items():
@@ -169,6 +201,7 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=(
             "examples:\n"
             "  %(prog)s --files experiment.json --analysis params.toml\n"
+            "  %(prog)s --files CS.json --files Empty-Split.json --analysis params.toml\n"
             "  %(prog)s --files experiment.json --analysis params.toml --output-root /data/results"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -176,8 +209,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--files",
         required=True,
+        action="append",
         metavar="FILES_JSON",
-        help="JSON config mapping group names to lists of recording file paths.",
+        help=(
+            "JSON config with recording file paths. Repeat to compare reusable "
+            "single-group files."
+        ),
     )
     parser.add_argument(
         "--analysis",

@@ -2,10 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from looming_analysis.run_config import (
+    build_parser,
     build_output_dir,
     load_analysis_config,
     load_files_config,
+    load_files_configs,
     run_from_config,
 )
 
@@ -21,6 +25,58 @@ def test_load_files_config_json(tmp_path):
         "CS": ["a.braidz"],
         "DNp03": ["b.braidz"],
     }
+
+
+def test_load_files_config_accepts_explicit_single_group_file(tmp_path):
+    config_path = tmp_path / "cs.json"
+    config_path.write_text(
+        '{"group": "CS", "files": ["a.braidz", "b.braidz"]}',
+        encoding="utf-8",
+    )
+
+    assert load_files_config(config_path) == {
+        "CS": ["a.braidz", "b.braidz"],
+    }
+
+
+def test_load_files_configs_merges_repeated_file_configs(tmp_path):
+    cs_config = tmp_path / "cs.json"
+    cs_config.write_text('{"group": "CS", "files": ["a.braidz"]}', encoding="utf-8")
+    empty_split_config = tmp_path / "empty-split.json"
+    empty_split_config.write_text(
+        '{"group": "Empty-Split", "files": ["b.braidz"]}',
+        encoding="utf-8",
+    )
+
+    assert load_files_configs([cs_config, empty_split_config]) == {
+        "CS": ["a.braidz"],
+        "Empty-Split": ["b.braidz"],
+    }
+
+
+def test_load_files_configs_rejects_duplicate_group_names(tmp_path):
+    first_config = tmp_path / "first.json"
+    first_config.write_text('{"group": "CS", "files": ["a.braidz"]}', encoding="utf-8")
+    second_config = tmp_path / "second.json"
+    second_config.write_text('{"group": "CS", "files": ["b.braidz"]}', encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Duplicate group name"):
+        load_files_configs([first_config, second_config])
+
+
+def test_parser_accepts_repeated_files_args():
+    args = build_parser().parse_args(
+        [
+            "--files",
+            "CS.json",
+            "--files",
+            "Empty-Split.json",
+            "--analysis",
+            "analysis.toml",
+        ]
+    )
+
+    assert args.files == ["CS.json", "Empty-Split.json"]
 
 
 def test_load_analysis_config_toml(tmp_path):
@@ -66,8 +122,13 @@ def test_build_output_dir_uses_timestamp_and_groups(tmp_path):
 
 
 def test_run_from_config_saves_data_plots_and_config_snapshots(monkeypatch, tmp_path):
-    files_config = tmp_path / "files.json"
-    files_config.write_text('{"groups": {"CS": ["a.braidz"]}}', encoding="utf-8")
+    cs_config = tmp_path / "cs.json"
+    cs_config.write_text('{"group": "CS", "files": ["a.braidz"]}', encoding="utf-8")
+    empty_split_config = tmp_path / "empty-split.json"
+    empty_split_config.write_text(
+        '{"group": "Empty-Split", "files": ["b.braidz"]}',
+        encoding="utf-8",
+    )
     analysis_config = tmp_path / "analysis.toml"
     analysis_config.write_text(
         """
@@ -103,6 +164,8 @@ hue_by = "group"
             Path(path).write_text(self.name, encoding="utf-8")
 
     class FakeResult:
+        responses = []
+
         def to_dataframe(self, kind, backend="polars"):
             return FakeFrame(kind)
 
@@ -127,20 +190,47 @@ hue_by = "group"
         def plot_heading_change_comparison(self, **kwargs):
             return FakeFigure("heading-change-comparison")
 
+        def plot_inter_trigger_interval(self, **kwargs):
+            return FakeFigure("inter-trigger-interval")
+
+        def plot_response_latency(self, **kwargs):
+            return FakeFigure("response-latency")
+
+        def plot_latency_by_direction(self, **kwargs):
+            return FakeFigure("latency-by-direction")
+
+        def plot_peak_aligned_traces(self, **kwargs):
+            return FakeFigure("peak-aligned-angular-velocity")
+
+        def plot_screen_position_effect(self, **kwargs):
+            return FakeFigure("screen-position-effect")
+
+    calls = {}
+
+    def fake_run_analysis(file_groups, **kwargs):
+        calls["file_groups"] = file_groups
+        return FakeResult()
+
     monkeypatch.setattr(
-        "looming_analysis.run_config.run_analysis", lambda *args, **kwargs: FakeResult()
+        "looming_analysis.run_config.run_analysis",
+        fake_run_analysis,
     )
     monkeypatch.setattr(
         "looming_analysis.run_config.build_output_dir",
-        lambda output_root, file_groups: Path(output_root) / "20260427_153000-CS",
+        lambda output_root, file_groups, **kwargs: Path(output_root)
+        / "20260427_153000-CS_Empty-Split",
     )
 
     output_dir = run_from_config(
-        files_config,
+        [cs_config, empty_split_config],
         analysis_config,
         output_root=tmp_path / "outputs",
     )
 
+    assert calls["file_groups"] == {
+        "CS": ["a.braidz"],
+        "Empty-Split": ["b.braidz"],
+    }
     assert (output_dir / "trials.csv").read_text(encoding="utf-8") == "scalar"
     assert (output_dir / "traces.parquet").read_bytes() == b"long"
     assert (output_dir / "average-angular-velocity.png").exists()
@@ -149,5 +239,11 @@ hue_by = "group"
     assert (output_dir / "responsiveness-rates.png").exists()
     assert (output_dir / "peak-angular-velocity.png").exists()
     assert (output_dir / "turn-proportions.png").exists()
-    assert (output_dir / "files.json").exists()
+    assert (output_dir / "inter-trigger-interval.png").exists()
+    assert (output_dir / "response-latency.png").exists()
+    assert (output_dir / "latency-by-direction.png").exists()
+    assert (output_dir / "peak-aligned-angular-velocity.png").exists()
+    assert (output_dir / "screen-position-effect.png").exists()
+    assert (output_dir / "cs.json").exists()
+    assert (output_dir / "empty-split.json").exists()
     assert (output_dir / "analysis.toml").exists()
