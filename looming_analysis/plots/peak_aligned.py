@@ -15,6 +15,7 @@ from ._common import (
     annotate_facet,
     build_hue_colormap,
     iter_facets,
+    suptitle,
     unique_values,
 )
 
@@ -245,7 +246,7 @@ def plot_peak_aligned_traces(
             xlabel="Time relative to peak (s)",
         )
 
-    _suptitle(fig, row_by, col_by, hue_by)
+    suptitle(fig, row_by, col_by, hue_by, prefix="Peak-aligned angular velocity")
     fig.tight_layout()
     return fig
 
@@ -351,19 +352,6 @@ def plot_latency_by_direction(
     fig.tight_layout()
     return fig
 
-
-def _suptitle(fig: Figure, row_by, col_by, hue_by) -> None:
-    parts = ["Peak-aligned angular velocity"]
-    dims = []
-    if row_by:
-        dims.append(f"rows={row_by}")
-    if col_by:
-        dims.append(f"cols={col_by}")
-    if hue_by:
-        dims.append(f"hue={hue_by}")
-    if dims:
-        parts.append("  |  " + ", ".join(dims))
-    fig.suptitle("".join(parts), y=1.02)
 
 
 def plot_response_latency(

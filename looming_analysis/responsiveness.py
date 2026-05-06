@@ -11,6 +11,8 @@ from scipy.stats import circmean
 from ._types import DT_SECONDS, Response
 from .extract import _compute_heading_change_vector, _compute_rdp_turn_angle
 
+_PEAK_KW = dict(height=0.0, prominence=300, width=(3, 8), distance=5)
+
 RESPONSIVENESS_METHOD_FIELDS = {
     "peak": "is_responsive_peak",
     "zscore": "is_responsive_zscore",
@@ -100,6 +102,178 @@ def compute_turn_direction(
         else:
             r["turn_direction"] = None
     return responses
+
+
+def _detect_peak(
+    trace: np.ndarray,
+    ang_vel_abs: np.ndarray,
+    win_indices: np.ndarray,
+    threshold_deg_s: float,
+) -> tuple[int, float]:
+    """Method 0: find first abs peak above threshold. Returns (peak_global_idx, peak)."""
+    kw = {**_PEAK_KW, "height": threshold_deg_s}
+    peak_locals, _ = find_peaks(trace[win_indices], **kw)
+    if peak_locals.size > 0:
+        idx = int(win_indices[peak_locals[0]])
+        return idx, float(ang_vel_abs[idx])
+    return -1, float("nan")
+
+
+def _compute_zscore(
+    ang_vel_abs: np.ndarray,
+    bl_mask: np.ndarray,
+    peak: float,
+    zscore_k: float,
+) -> tuple[float, float, float, bool]:
+    """Method 1: baseline z-score. Returns (bl_mean, bl_sd, zscore, is_responsive)."""
+    bl_vals = ang_vel_abs[bl_mask]
+    bl_mean = float(np.nanmean(bl_vals)) if bl_vals.size > 0 else 0.0
+    bl_sd = float(np.nanstd(bl_vals)) if bl_vals.size > 0 else 0.0
+    if np.isnan(peak) or bl_sd == 0.0:
+        zscore = float("nan")
+    else:
+        zscore = (peak - bl_mean) / bl_sd
+    is_resp = (not np.isnan(zscore)) and (zscore >= zscore_k)
+    return bl_mean, bl_sd, zscore, is_resp
+
+
+def _detect_saccade(
+    signed_trace: np.ndarray,
+    ang_vel_deg_signed: np.ndarray,
+    time: np.ndarray,
+    win_indices: np.ndarray,
+    threshold_deg_s: float,
+) -> tuple[float, float]:
+    """Method 3: first signed saccade above threshold. Returns (saccade_peak, saccade_peak_time_ms)."""
+    kw = {**_PEAK_KW, "height": threshold_deg_s}
+    win_sig = signed_trace[win_indices]
+    pos_locals, _ = find_peaks(win_sig, **kw)
+    neg_locals, _ = find_peaks(-win_sig, **kw)
+    candidates = np.sort(np.concatenate([pos_locals, neg_locals]))
+    if candidates.size > 0:
+        first_global = win_indices[candidates[0]]
+        return float(ang_vel_deg_signed[first_global]), float(time[first_global] * 1000.0)
+    return float("nan"), float("nan")
+
+
+def _compute_heading_window_metrics(
+    heading: np.ndarray,
+    time: np.ndarray,
+    bl_mask: np.ndarray,
+    window_mask: np.ndarray,
+    end_t: float,
+    after_s: float,
+    saccade_peak_time_ms: float,
+    heading_threshold_deg: float,
+) -> dict:
+    """H0-H3 heading metrics inside the detection window."""
+    bl_heading = circmean(heading[bl_mask], low=-np.pi, high=np.pi)
+
+    # H0 — net change: pre-stim mean → end of window
+    post_win_mask = (time >= end_t + after_s - 0.1) & (time <= end_t + after_s)
+    if post_win_mask.any():
+        post_h = circmean(heading[post_win_mask], low=-np.pi, high=np.pi)
+        hc_window_net = float(
+            np.rad2deg(np.arctan2(np.sin(post_h - bl_heading), np.cos(post_h - bl_heading)))
+        )
+    else:
+        hc_window_net = float("nan")
+
+    # H1 — max circular deviation from pre-stim baseline in window
+    if window_mask.any():
+        devs = np.abs(
+            np.rad2deg(
+                np.arctan2(
+                    np.sin(heading[window_mask] - bl_heading),
+                    np.cos(heading[window_mask] - bl_heading),
+                )
+            )
+        )
+        hc_max_dev = float(np.nanmax(devs))
+    else:
+        hc_max_dev = float("nan")
+
+    # H2 — net change locked to detected saccade (NaN if no saccade)
+    if not np.isnan(saccade_peak_time_ms):
+        t_sac = saccade_peak_time_ms / 1000.0
+        pre_sac = (time >= t_sac - 0.05) & (time < t_sac)
+        post_sac = (time > t_sac) & (time <= t_sac + 0.05)
+        if pre_sac.any() and post_sac.any():
+            h_pre = circmean(heading[pre_sac], low=-np.pi, high=np.pi)
+            h_post = circmean(heading[post_sac], low=-np.pi, high=np.pi)
+            hc_post_saccade = float(
+                np.rad2deg(np.arctan2(np.sin(h_post - h_pre), np.cos(h_post - h_pre)))
+            )
+        else:
+            hc_post_saccade = float("nan")
+    else:
+        hc_post_saccade = float("nan")
+
+    # H3 — total rotation (path length) in window
+    win_heading = heading[window_mask]
+    if win_heading.size > 1:
+        diffs = np.abs(
+            np.rad2deg(np.arctan2(np.sin(np.diff(win_heading)), np.cos(np.diff(win_heading))))
+        )
+        hc_path_length = float(np.sum(diffs))
+    else:
+        hc_path_length = float("nan")
+
+    thr = heading_threshold_deg
+    return {
+        "heading_change_window_net": hc_window_net,
+        "heading_change_max_dev": hc_max_dev,
+        "heading_change_post_saccade": hc_post_saccade,
+        "heading_change_path_length": hc_path_length,
+        "is_responsive_heading_window_net": not np.isnan(hc_window_net) and abs(hc_window_net) >= thr,
+        "is_responsive_heading_max_dev": not np.isnan(hc_max_dev) and hc_max_dev >= thr,
+        "is_responsive_heading_post_saccade": not np.isnan(hc_post_saccade) and abs(hc_post_saccade) >= thr,
+        "is_responsive_heading_path_length": not np.isnan(hc_path_length) and hc_path_length >= thr,
+    }
+
+
+def _apply_peak_aligned_metrics(
+    r: "Response",
+    ref_idx: int,
+    ref_frames: int,
+    rdp_epsilon: float,
+) -> None:
+    """Second pass: fill heading_change_peak_aligned, heading_change_peak_vector, heading_change_rdp."""
+    heading = r.get("heading")
+    if heading is not None:
+        pre_pk = heading[max(0, ref_idx - ref_frames) : ref_idx]
+        post_pk = heading[ref_idx : ref_idx + ref_frames]
+        if len(pre_pk) > 0 and len(post_pk) > 0:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                h_pre = circmean(pre_pk, low=-np.pi, high=np.pi)
+                h_post = circmean(post_pk, low=-np.pi, high=np.pi)
+            hc_peak_aligned = float(
+                np.rad2deg(np.arctan2(np.sin(h_post - h_pre), np.cos(h_post - h_pre)))
+            )
+        else:
+            hc_peak_aligned = float("nan")
+
+        xvel, yvel = r.get("xvel"), r.get("yvel")
+        hc_peak_vector = (
+            _compute_heading_change_vector(xvel, yvel, ref_idx, window=ref_frames)
+            if xvel is not None and yvel is not None
+            else float("nan")
+        )
+    else:
+        hc_peak_aligned = float("nan")
+        hc_peak_vector = float("nan")
+
+    r["heading_change_peak_aligned"] = hc_peak_aligned
+    r["heading_change_peak_vector"] = hc_peak_vector
+
+    xvel, yvel = r.get("xvel"), r.get("yvel")
+    if xvel is not None and yvel is not None:
+        r["heading_change_rdp"] = _compute_rdp_turn_angle(
+            xvel, yvel, ref_idx, epsilon=rdp_epsilon, half_window=50
+        )["angle"]
+    else:
+        r["heading_change_rdp"] = float("nan")
 
 
 def classify_responsiveness(
@@ -195,6 +369,7 @@ def classify_responsiveness(
     before_s, after_s = _reaction_window_seconds(window_ms)
     bl_start = baseline_window_ms[0] / 1000.0
     bl_end = baseline_window_ms[1] / 1000.0
+
     for r in responses:
         time = r["time"]
         dt = float(time[1] - time[0]) if len(time) > 1 else DT_SECONDS
@@ -202,195 +377,76 @@ def classify_responsiveness(
         ang_vel_abs = np.abs(ang_vel_deg_signed)
         end_t = r["end_expansion_time"]
 
-        # NaN-safe traces for peak detection
         trace = np.where(np.isnan(ang_vel_abs), 0.0, ang_vel_abs)
         signed_trace = np.where(np.isnan(ang_vel_deg_signed), 0.0, ang_vel_deg_signed)
 
         window_mask = (time >= end_t - before_s) & (time <= end_t + after_s)
         win_indices = np.where(window_mask)[0]
+        bl_mask = (time >= bl_start) & (time <= bl_end)
 
-        # ------------------------------------------------------------------
-        # Method 0 — first abs peak above threshold in window
-        # ------------------------------------------------------------------
-        peak_locals, _ = find_peaks(
-            trace[win_indices],
-            height=threshold_deg_s,
-            prominence=300,
-            width=(3, 8),
-            distance=5,
-        )
-        if peak_locals.size > 0:
-            peak_global_idx = int(win_indices[peak_locals[0]])
-            peak = float(ang_vel_abs[peak_global_idx])
-        else:
-            peak_global_idx = -1
-            peak = float("nan")
+        # Method 0 — peak
+        peak_global_idx, peak = _detect_peak(trace, ang_vel_abs, win_indices, threshold_deg_s)
         r["peak_ang_vel_deg_s"] = peak
         r["is_responsive_peak"] = not np.isnan(peak)
         r["_peak_global_idx"] = peak_global_idx
 
-        # ------------------------------------------------------------------
-        # Method 1 — z-score relative to pre-stim baseline
-        # ------------------------------------------------------------------
-        bl_mask = (time >= bl_start) & (time <= bl_end)
-        bl_vals = ang_vel_abs[bl_mask]
-        bl_mean = float(np.nanmean(bl_vals)) if bl_vals.size > 0 else 0.0
-        bl_sd = float(np.nanstd(bl_vals)) if bl_vals.size > 0 else 0.0
+        # Method 1 — z-score
+        bl_mean, bl_sd, zscore, is_resp_z = _compute_zscore(ang_vel_abs, bl_mask, peak, zscore_k)
         r["baseline_ang_vel_mean"] = bl_mean
         r["baseline_ang_vel_sd"] = bl_sd
-        if np.isnan(peak) or bl_sd == 0.0:
-            zscore = float("nan")
-        else:
-            zscore = (peak - bl_mean) / bl_sd
         r["peak_ang_vel_zscore"] = zscore
-        r["is_responsive_zscore"] = (not np.isnan(zscore)) and (zscore >= zscore_k)
+        r["is_responsive_zscore"] = is_resp_z
 
-        # ------------------------------------------------------------------
-        # Method 2 — heading change magnitude
-        # ------------------------------------------------------------------
-        r["is_responsive_heading"] = (
-            abs(r.get("heading_change", 0.0)) >= heading_threshold_deg
+        # Method 2 — heading change magnitude (one-liner)
+        r["is_responsive_heading"] = abs(r.get("heading_change", 0.0)) >= heading_threshold_deg
+
+        # Method 3 — signed saccade
+        saccade_peak, saccade_peak_time = _detect_saccade(
+            signed_trace, ang_vel_deg_signed, time, win_indices, threshold_deg_s
         )
-
-        # ------------------------------------------------------------------
-        # Method 3 — first signed peak above threshold in window
-        # ------------------------------------------------------------------
-        win_sig = signed_trace[win_indices]
-        _peak_kw = dict(
-            height=threshold_deg_s, prominence=300, width=(3, 8), distance=5
-        )
-        pos_locals, _ = find_peaks(win_sig, **_peak_kw)
-        neg_locals, _ = find_peaks(-win_sig, **_peak_kw)
-        candidates_local = np.sort(np.concatenate([pos_locals, neg_locals]))
-
-        if candidates_local.size > 0:
-            first_global = win_indices[candidates_local[0]]
-            saccade_peak = float(ang_vel_deg_signed[first_global])
-            saccade_peak_time = float(time[first_global] * 1000.0)
-        else:
-            saccade_peak = float("nan")
-            saccade_peak_time = float("nan")
-
         r["saccade_peak_time_ms"] = saccade_peak_time
         r["saccade_peak_ang_vel_signed_deg_s"] = saccade_peak
         r["saccade_onset_ms"] = saccade_peak_time
         r["saccade_duration_ms"] = float("nan")
         r["is_responsive_saccade"] = not np.isnan(saccade_peak)
 
-        # ------------------------------------------------------------------
-        # Method 4 — angular impulse in detection window
-        # ------------------------------------------------------------------
+        # Method 4 — angular impulse
         win_abs = ang_vel_abs[window_mask]
         impulse = float(np.sum(trace[window_mask]) * dt)
         r["angular_impulse_deg"] = impulse
         r["is_responsive_impulse"] = impulse >= impulse_threshold_deg
         r["mean_ang_vel_window_deg_s"] = float(np.nanmean(win_abs)) if win_abs.size > 0 else float("nan")
 
-        # ------------------------------------------------------------------
-        # Heading change metrics H0–H3 (require r["heading"] in radians)
-        # ------------------------------------------------------------------
+        # Heading metrics H0–H3
         heading = r.get("heading")
         if heading is not None and bl_mask.any():
-            bl_heading = circmean(heading[bl_mask], low=-np.pi, high=np.pi)
-
-            # H0 — detection-window net change (pre-stim mean vs. end of window)
-            post_win_mask = (time >= end_t + after_s - 0.1) & (time <= end_t + after_s)
-            if post_win_mask.any():
-                post_h = circmean(heading[post_win_mask], low=-np.pi, high=np.pi)
-                hc_window_net = float(
-                    np.rad2deg(
-                        np.arctan2(
-                            np.sin(post_h - bl_heading), np.cos(post_h - bl_heading)
-                        )
-                    )
+            r.update(
+                _compute_heading_window_metrics(
+                    heading, time, bl_mask, window_mask, end_t, after_s,
+                    saccade_peak_time, heading_threshold_deg,
                 )
-            else:
-                hc_window_net = float("nan")
-
-            # H1 — max circular deviation from pre-stim baseline in window
-            if window_mask.any():
-                deviations = np.abs(
-                    np.rad2deg(
-                        np.arctan2(
-                            np.sin(heading[window_mask] - bl_heading),
-                            np.cos(heading[window_mask] - bl_heading),
-                        )
-                    )
-                )
-                hc_max_dev = float(np.nanmax(deviations))
-            else:
-                hc_max_dev = float("nan")
-
-            # H2 — net heading change locked to detected saccade (NaN if no saccade)
-            if not np.isnan(saccade_peak_time):
-                t_sac = saccade_peak_time / 1000.0
-                pre_sac = (time >= t_sac - 0.05) & (time < t_sac)
-                post_sac = (time > t_sac) & (time <= t_sac + 0.05)
-                if pre_sac.any() and post_sac.any():
-                    h_pre = circmean(heading[pre_sac], low=-np.pi, high=np.pi)
-                    h_post = circmean(heading[post_sac], low=-np.pi, high=np.pi)
-                    hc_post_saccade = float(
-                        np.rad2deg(
-                            np.arctan2(np.sin(h_post - h_pre), np.cos(h_post - h_pre))
-                        )
-                    )
-                else:
-                    hc_post_saccade = float("nan")
-            else:
-                hc_post_saccade = float("nan")
-
-            # H3 — heading path length (total rotation) in window
-            win_heading = heading[window_mask]
-            if win_heading.size > 1:
-                diffs = np.abs(
-                    np.rad2deg(
-                        np.arctan2(
-                            np.sin(np.diff(win_heading)),
-                            np.cos(np.diff(win_heading)),
-                        )
-                    )
-                )
-                hc_path_length = float(np.sum(diffs))
-            else:
-                hc_path_length = float("nan")
+            )
         else:
-            hc_window_net = hc_max_dev = hc_post_saccade = hc_path_length = float("nan")
+            r.update({
+                "heading_change_window_net": float("nan"),
+                "heading_change_max_dev": float("nan"),
+                "heading_change_post_saccade": float("nan"),
+                "heading_change_path_length": float("nan"),
+                "is_responsive_heading_window_net": False,
+                "is_responsive_heading_max_dev": False,
+                "is_responsive_heading_post_saccade": False,
+                "is_responsive_heading_path_length": False,
+            })
 
-        r["heading_change_window_net"] = hc_window_net
-        r["heading_change_max_dev"] = hc_max_dev
-        r["heading_change_post_saccade"] = hc_post_saccade
-        r["heading_change_path_length"] = hc_path_length
-
-        r["is_responsive_heading_window_net"] = (
-            not np.isnan(hc_window_net) and abs(hc_window_net) >= heading_threshold_deg
-        )
-        r["is_responsive_heading_max_dev"] = (
-            not np.isnan(hc_max_dev) and hc_max_dev >= heading_threshold_deg
-        )
-        r["is_responsive_heading_post_saccade"] = (
-            not np.isnan(hc_post_saccade)
-            and abs(hc_post_saccade) >= heading_threshold_deg
-        )
-        r["is_responsive_heading_path_length"] = (
-            not np.isnan(hc_path_length) and hc_path_length >= heading_threshold_deg
-        )
-
-        # ------------------------------------------------------------------
-        # Method 5 — signed-peak saccade + heading change (default / is_responsive)
-        # ------------------------------------------------------------------
+        # Method 5 — combined (saccade + heading)
         r["peak_ang_vel_signed_deg_s"] = saccade_peak
-        r["is_responsive_combined"] = (
-            r["is_responsive_saccade"] and r["is_responsive_heading"]
-        )
+        r["is_responsive_combined"] = r["is_responsive_saccade"] and r["is_responsive_heading"]
         r["responsiveness_method"] = method
         r["is_responsive"] = bool(r[RESPONSIVENESS_METHOD_FIELDS[method]])
 
-    # ------------------------------------------------------------------
-    # H4/H5 — peak-aligned heading metrics (second pass)
-    # For responsive flies: ref = detected peak angular velocity index.
-    # For non-responsive flies: ref = average peak latency of responsive flies,
-    #   so non-responsive trials are evaluated at the typical response time.
-    # ------------------------------------------------------------------
+    # Second pass: peak-aligned metrics
+    # For responsive flies use their own detected peak; for non-responsive flies
+    # use the population mean peak latency as the reference index.
     responsive_peak_times = [
         float(r["time"][r["_peak_global_idx"]])
         for r in responses
@@ -411,48 +467,6 @@ def classify_responsiveness(
         else:
             ref_idx = int(np.argmin(np.abs(time - end_t)))
 
-        heading = r.get("heading")
-        if heading is not None:
-            pre_pk = heading[max(0, ref_idx - _ref_frames) : ref_idx]
-            post_pk = heading[ref_idx : ref_idx + _ref_frames]
-            if len(pre_pk) > 0 and len(post_pk) > 0:
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore", RuntimeWarning)
-                    h_pre_pk = circmean(pre_pk, low=-np.pi, high=np.pi)
-                    h_post_pk = circmean(post_pk, low=-np.pi, high=np.pi)
-                hc_peak_aligned = float(
-                    np.rad2deg(
-                        np.arctan2(
-                            np.sin(h_post_pk - h_pre_pk),
-                            np.cos(h_post_pk - h_pre_pk),
-                        )
-                    )
-                )
-            else:
-                hc_peak_aligned = float("nan")
-
-            xvel = r.get("xvel")
-            yvel = r.get("yvel")
-            hc_peak_vector = (
-                _compute_heading_change_vector(xvel, yvel, ref_idx, window=_ref_frames)
-                if xvel is not None and yvel is not None
-                else float("nan")
-            )
-        else:
-            hc_peak_aligned = float("nan")
-            hc_peak_vector = float("nan")
-
-        r["heading_change_peak_aligned"] = hc_peak_aligned
-        r["heading_change_peak_vector"] = hc_peak_vector
-
-        xvel = r.get("xvel")
-        yvel = r.get("yvel")
-        if xvel is not None and yvel is not None:
-            rdp_result = _compute_rdp_turn_angle(
-                xvel, yvel, ref_idx, epsilon=rdp_epsilon, half_window=50
-            )
-            r["heading_change_rdp"] = rdp_result["angle"]
-        else:
-            r["heading_change_rdp"] = float("nan")
+        _apply_peak_aligned_metrics(r, ref_idx, _ref_frames, rdp_epsilon)
 
     return responses

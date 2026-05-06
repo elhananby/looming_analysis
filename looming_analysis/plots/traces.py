@@ -14,6 +14,8 @@ from ._common import (
     build_hue_colormap,
     iter_facets,
     prepare_ang_vel,
+    require_responsiveness,
+    suptitle,
     unique_values,
 )
 
@@ -115,14 +117,6 @@ def _draw_traces(
     ax.legend(fontsize=8, loc="upper left")
 
 
-def _require_responsiveness(responses: list[Response]) -> None:
-    if responses and "is_responsive" not in responses[0]:
-        raise ValueError(
-            "Responses do not include 'is_responsive'. "
-            "Call classify_responsiveness(responses) before plotting responsive traces."
-        )
-
-
 def plot_responses(
     responses: list[Response],
     *,
@@ -190,7 +184,7 @@ def plot_responses(
                 )
         annotate_facet(ax, row_val, col_val, row_by, col_by, position, ylabel)
 
-    _suptitle(fig, row_by, col_by, hue_by, prefix="Fly Response to Looming")
+    suptitle(fig, row_by, col_by, hue_by, prefix="Fly Response to Looming")
     fig.tight_layout()
     return fig
 
@@ -220,7 +214,7 @@ def plot_responses_by_responsiveness(
     Returns:
         The matplotlib Figure.
     """
-    _require_responsiveness(responses)
+    require_responsiveness(responses)
 
     col_vals = unique_values(responses, col_by)
     n_cols = len(col_vals) if col_vals else 1
@@ -264,7 +258,7 @@ def plot_responses_by_responsiveness(
             if row_idx == n_rows - 1:
                 ax.set_xlabel("Time relative to stimulus start (s)")
 
-    _suptitle(
+    suptitle(
         fig,
         row_by=None,
         col_by=col_by,
@@ -275,15 +269,3 @@ def plot_responses_by_responsiveness(
     return fig
 
 
-def _suptitle(fig: Figure, row_by, col_by, hue_by, *, prefix: str) -> None:
-    parts = [prefix]
-    dims = []
-    if row_by:
-        dims.append(f"rows={row_by}")
-    if col_by:
-        dims.append(f"cols={col_by}")
-    if hue_by:
-        dims.append(f"hue={hue_by}")
-    if dims:
-        parts.append("  |  " + ", ".join(dims))
-    fig.suptitle("".join(parts), y=1.02)

@@ -7,6 +7,7 @@ from typing import Any, Callable, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.figure import Figure
 
 from .._types import Response
 
@@ -281,3 +282,25 @@ def annotate_facet(
             ax.set_ylabel(base_ylabel)
     if is_bottom:
         ax.set_xlabel(xlabel)
+
+
+def require_responsiveness(responses: list[Response]) -> None:
+    if responses and "is_responsive" not in responses[0]:
+        raise ValueError(
+            "Responses do not include 'is_responsive'. "
+            "Call classify_responsiveness(responses) before this plot."
+        )
+
+
+def suptitle(fig: Figure, row_by, col_by, hue_by, *, prefix: str) -> None:
+    parts = [prefix]
+    dims = []
+    if row_by:
+        dims.append(f"rows={row_by}")
+    if col_by:
+        dims.append(f"cols={col_by}")
+    if hue_by:
+        dims.append(f"hue={hue_by}")
+    if dims:
+        parts.append("  |  " + ", ".join(dims))
+    fig.suptitle("".join(parts), y=1.02)

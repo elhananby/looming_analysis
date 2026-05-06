@@ -9,15 +9,7 @@ import numpy as np
 from matplotlib.figure import Figure
 
 from .._types import Response
-from ._common import build_hue_colormap, effective_axis, unique_values
-
-
-def _require_responsiveness(responses: list[Response]) -> None:
-    if responses and "is_responsive" not in responses[0]:
-        raise ValueError(
-            "Responses do not include 'is_responsive'. "
-            "Call classify_responsiveness(responses) before plotting rates."
-        )
+from ._common import build_hue_colormap, effective_axis, require_responsiveness, unique_values
 
 
 def plot_responsiveness_rates(
@@ -48,7 +40,7 @@ def plot_responsiveness_rates(
     Returns:
         The matplotlib Figure.
     """
-    _require_responsiveness(responses)
+    require_responsiveness(responses)
 
     effective_rows, n_rows = effective_axis(responses, row_by)
     effective_x, _ = effective_axis(responses, col_by)
