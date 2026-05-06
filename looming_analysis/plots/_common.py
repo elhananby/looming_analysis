@@ -134,7 +134,7 @@ def prepare_ang_vel(
     if baseline_subtract:
         pre_mask = time_axis < 0
         if pre_mask.any():
-            with np.errstate(all="ignore"):
+            with np.errstate(invalid="ignore"):
                 baseline = np.nanmean(data_abs_deg[:, pre_mask], axis=1, keepdims=True)
             data_abs_deg = data_abs_deg - baseline
     return data_abs_deg

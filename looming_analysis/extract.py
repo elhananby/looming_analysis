@@ -65,6 +65,71 @@ def _compute_heading_change_vector(
     )
 
 
+def _compute_rdp_turn_angle(
+    xvel: np.ndarray,
+    yvel: np.ndarray,
+    ref_idx: int,
+    epsilon: float,
+    half_window: int = 50,
+) -> dict:
+    """RDP-based turn angle at *ref_idx*.
+
+    Integrates xvel/yvel to get a relative 2D trajectory, simplifies it with
+    the Ramer-Douglas-Peucker algorithm, then measures the angle at the
+    simplified vertex nearest to *ref_idx*.
+
+    Returns a dict with keys:
+        angle               – turn angle in degrees (nan if vertex is at endpoint)
+        raw_points          – (N+1, 2) array of integrated positions in the window
+        simplified          – (M, 2) simplified polyline vertices
+        simplified_indices  – local frame indices of each simplified vertex
+        turn_vertex_local   – index into *simplified* of the chosen vertex
+        local_ref           – index of ref_idx within raw_points
+        start_frame         – absolute start frame of the window
+    """
+    from rdp import rdp as _rdp
+
+    n = len(xvel)
+    start = max(0, ref_idx - half_window)
+    end = min(n, ref_idx + half_window + 1)
+
+    x_pos = np.concatenate([[0.0], np.cumsum(xvel[start:end])])
+    y_pos = np.concatenate([[0.0], np.cumsum(yvel[start:end])])
+    raw_points = np.column_stack([x_pos, y_pos])
+
+    local_ref = ref_idx - start
+
+    mask = _rdp(raw_points, epsilon=epsilon, return_mask=True)
+    simplified = raw_points[mask]
+    simplified_indices = np.where(mask)[0]
+
+    dists = np.abs(simplified_indices - local_ref)
+    nearest = int(np.argmin(dists))
+
+    if nearest == 0 or nearest == len(simplified) - 1:
+        angle = float("nan")
+    else:
+        v_in = simplified[nearest] - simplified[nearest - 1]
+        v_out = simplified[nearest + 1] - simplified[nearest]
+        a_in = np.arctan2(v_in[1], v_in[0])
+        a_out = np.arctan2(v_out[1], v_out[0])
+        angle = float(
+            np.rad2deg(
+                np.arctan2(np.sin(a_out - a_in), np.cos(a_out - a_in))
+            )
+        )
+
+    return {
+        "angle": angle,
+        "raw_points": raw_points,
+        "simplified": simplified,
+        "simplified_indices": simplified_indices,
+        "turn_vertex_local": nearest,
+        "local_ref": local_ref,
+        "start_frame": start,
+    }
+
+
 def _compute_heading_change(
     headings: np.ndarray,
     stim_idx: int,
@@ -78,19 +143,15 @@ def _compute_heading_change(
         else headings[:1]
     )
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+        warnings.simplefilter("ignore", RuntimeWarning)
         heading_before = circmean(pre_window, low=-np.pi, high=np.pi)
 
-    if end_expansion_idx < len(headings):
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            heading_after = circmean(
-                headings[end_expansion_idx : end_expansion_idx + ref_frames],
-                low=-np.pi,
-                high=np.pi,
-            )
-    else:
-        heading_after = headings[-1]
+    post_window = headings[end_expansion_idx : end_expansion_idx + ref_frames]
+    if len(post_window) == 0:
+        post_window = headings[-ref_frames:]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        heading_after = circmean(post_window, low=-np.pi, high=np.pi)
 
     return float(
         np.rad2deg(

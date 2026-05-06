@@ -9,7 +9,7 @@ from scipy.signal import find_peaks
 from scipy.stats import circmean
 
 from ._types import DT_SECONDS, Response
-from .extract import _compute_heading_change_vector
+from .extract import _compute_heading_change_vector, _compute_rdp_turn_angle
 
 RESPONSIVENESS_METHOD_FIELDS = {
     "peak": "is_responsive_peak",
@@ -111,6 +111,7 @@ def classify_responsiveness(
     heading_threshold_deg: float = 30.0,
     impulse_threshold_deg: float = 20.0,
     method: str = "combined",
+    rdp_epsilon: float = 0.5,
 ) -> list[Response]:
     """Tag each response dict with responsiveness metadata from multiple methods.
 
@@ -416,7 +417,7 @@ def classify_responsiveness(
             post_pk = heading[ref_idx : ref_idx + _ref_frames]
             if len(pre_pk) > 0 and len(post_pk) > 0:
                 with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
+                    warnings.simplefilter("ignore", RuntimeWarning)
                     h_pre_pk = circmean(pre_pk, low=-np.pi, high=np.pi)
                     h_post_pk = circmean(post_pk, low=-np.pi, high=np.pi)
                 hc_peak_aligned = float(
@@ -443,5 +444,15 @@ def classify_responsiveness(
 
         r["heading_change_peak_aligned"] = hc_peak_aligned
         r["heading_change_peak_vector"] = hc_peak_vector
+
+        xvel = r.get("xvel")
+        yvel = r.get("yvel")
+        if xvel is not None and yvel is not None:
+            rdp_result = _compute_rdp_turn_angle(
+                xvel, yvel, ref_idx, epsilon=rdp_epsilon, half_window=50
+            )
+            r["heading_change_rdp"] = rdp_result["angle"]
+        else:
+            r["heading_change_rdp"] = float("nan")
 
     return responses
