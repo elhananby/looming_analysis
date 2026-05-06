@@ -112,6 +112,17 @@ def iter_hue_subsets(
         yield hv, subset
 
 
+def build_legend_patches(
+    color_map: dict,
+    hue_vals: list,
+    alpha: float = 0.7,
+) -> list:
+    """Build a list of ``Patch`` handles for a hue legend."""
+    from matplotlib.patches import Patch
+
+    return [Patch(facecolor=color_map[hv], alpha=alpha, label=str(hv)) for hv in hue_vals]
+
+
 def build_hue_colormap(
     responses: list[Response],
     hue_by: Optional[str],
@@ -177,8 +188,6 @@ def plot_violin_facets(
     Each violin shows the distribution of `value_fn(response)` for trials
     matching one (row_val, col_val, hue_val) cell. NaN values are dropped.
     """
-    from matplotlib.patches import Patch  # local to avoid circular at module level
-
     if responsive_only:
         responses = [r for r in responses if r.get("is_responsive")]
 
@@ -245,10 +254,7 @@ def plot_violin_facets(
 
         if row_idx == 0 and hue_by is not None:
             ax.legend(
-                handles=[
-                    Patch(facecolor=color_map[hv], alpha=0.7, label=str(hv))
-                    for hv in hue_vals
-                ],
+                handles=build_legend_patches(color_map, hue_vals),
                 title=hue_by,
                 bbox_to_anchor=(1.02, 1),
                 loc="upper left",

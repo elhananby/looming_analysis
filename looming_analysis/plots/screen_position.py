@@ -7,10 +7,8 @@ from typing import Optional
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
-from matplotlib.patches import Patch
-
 from .._types import Response
-from ._common import build_hue_colormap, unique_values
+from ._common import build_hue_colormap, build_legend_patches, unique_values
 
 
 def plot_screen_position_effect(
@@ -118,11 +116,7 @@ def plot_screen_position_effect(
     axes[-1].set_xlabel(f"Within-screen x position (px,  bin width={int(bin_width)}px)")
 
     if hue_by is not None:
-        legend_handles = [
-            Patch(facecolor=color_map[hv], alpha=0.7, label=str(hv))
-            for hv in hue_vals
-        ]
-        axes[0].legend(handles=legend_handles, title=hue_by,
+        axes[0].legend(handles=build_legend_patches(color_map, hue_vals), title=hue_by,
                        bbox_to_anchor=(1.02, 1), loc="upper left")
 
     fig.suptitle(
