@@ -3,7 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from looming_analysis import classify_responsiveness
+from looming_analysis import classify_responsiveness, compute_turn_direction
 
 
 def test_classify_responsiveness_defaults_to_combined(responsive_trace_response):
@@ -219,3 +219,124 @@ def test_heading_change_fields_nan_without_heading_array(responsive_trace_respon
         assert np.isnan(responses[0][field]), (
             f"{field} should be NaN without heading array"
         )
+
+
+# ---------------------------------------------------------------------------
+# Peak-aligned second-pass metrics
+# ---------------------------------------------------------------------------
+
+def _response_with_vel(heading_change_deg: float = 60.0) -> dict:
+    """Synthetic response with xvel/yvel and a heading turn."""
+    time = np.arange(-0.1, 0.6, 0.01)
+    ang_vel_deg_s = np.zeros_like(time)
+    headings = np.zeros(len(time))
+    xvel = np.ones(len(time)) * 0.1
+    yvel = np.zeros(len(time))
+    peak_idx = np.argmin(np.abs(time - 0.30))
+    ang_vel_deg_s[peak_idx - 2 : peak_idx + 3] = 600.0
+    headings[peak_idx:] = np.deg2rad(heading_change_deg)
+    return {
+        "time": time,
+        "ang_vel": np.deg2rad(ang_vel_deg_s),
+        "heading": headings,
+        "xvel": xvel,
+        "yvel": yvel,
+        "end_expansion_time": 0.30,
+        "heading_change": heading_change_deg,
+    }
+
+
+def test_peak_aligned_metrics_present_after_classify():
+    r = _response_with_vel(60.0)
+    responses = classify_responsiveness(
+        [r],
+        threshold_deg_s=500.0,
+        heading_threshold_deg=30.0,
+        baseline_window_ms=(-90.0, -10.0),
+    )
+    out = responses[0]
+    for field in ("heading_change_peak_aligned", "heading_change_peak_vector", "heading_change_rdp"):
+        assert field in out, f"missing field: {field}"
+        assert isinstance(out[field], float), f"{field} should be float"
+
+
+def test_peak_aligned_and_peak_vector_finite_for_responsive():
+    r = _response_with_vel(60.0)
+    responses = classify_responsiveness(
+        [r],
+        threshold_deg_s=500.0,
+        heading_threshold_deg=30.0,
+        baseline_window_ms=(-90.0, -10.0),
+    )
+    out = responses[0]
+    assert not np.isnan(out["heading_change_peak_aligned"])
+    assert not np.isnan(out["heading_change_peak_vector"])
+
+
+def test_nonresponsive_uses_population_mean_ref():
+    # A non-responsive trial (no saccade) should still get finite peak-aligned
+    # metrics when there is at least one responsive trial setting a mean latency.
+    responsive = _response_with_vel(60.0)
+    nonresponsive = {
+        "time": responsive["time"].copy(),
+        "ang_vel": np.zeros(len(responsive["time"])),
+        "heading": np.zeros(len(responsive["time"])),
+        "xvel": np.ones(len(responsive["time"])) * 0.1,
+        "yvel": np.zeros(len(responsive["time"])),
+        "end_expansion_time": 0.30,
+        "heading_change": 5.0,
+    }
+    responses = classify_responsiveness(
+        [responsive, nonresponsive],
+        threshold_deg_s=500.0,
+        heading_threshold_deg=30.0,
+        baseline_window_ms=(-90.0, -10.0),
+    )
+    nr = responses[1]
+    assert nr["is_responsive"] is False
+    assert not np.isnan(nr["heading_change_peak_aligned"]), (
+        "non-responsive fly should use mean peak latency as ref"
+    )
+
+
+# ---------------------------------------------------------------------------
+# compute_turn_direction
+# ---------------------------------------------------------------------------
+
+def test_compute_turn_direction_right_from_saccade(responsive_trace_response):
+    r = dict(responsive_trace_response)
+    r["ang_vel"] = np.abs(r["ang_vel"])  # positive angular velocity
+    classify_responsiveness(
+        [r],
+        threshold_deg_s=500.0,
+        heading_threshold_deg=30.0,
+        baseline_window_ms=(-90.0, -10.0),
+    )
+    compute_turn_direction([r])
+    assert r["turn_direction"] in ("left", "right")
+    assert not np.isnan(r["signed_peak_ang_vel_deg_s"])
+
+
+def test_compute_turn_direction_left_for_negative_peak(negative_saccade_response):
+    r = dict(negative_saccade_response)
+    classify_responsiveness(
+        [r],
+        threshold_deg_s=500.0,
+        heading_threshold_deg=30.0,
+        baseline_window_ms=(-90.0, -10.0),
+    )
+    compute_turn_direction([r])
+    assert r["turn_direction"] == "left"
+    assert r["signed_peak_ang_vel_deg_s"] < 0
+
+
+def test_compute_turn_direction_none_for_zero_peak():
+    time = np.arange(-0.1, 0.5, 0.01)
+    r = {
+        "time": time,
+        "ang_vel": np.zeros(len(time)),
+        "end_expansion_time": 0.30,
+        "heading_change": 0.0,
+    }
+    compute_turn_direction([r])
+    assert r["turn_direction"] is None

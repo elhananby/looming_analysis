@@ -12,6 +12,7 @@ from ._types import DT_SECONDS, Response
 from .extract import _compute_heading_change_vector, _compute_rdp_turn_angle
 
 _PEAK_KW = dict(height=0.0, prominence=300, width=(3, 8), distance=5)
+_H0_WINDOW_S = 0.1  # trailing window width for H0 net heading change at detection-window end
 
 RESPONSIVENESS_METHOD_FIELDS = {
     "peak": "is_responsive_peak",
@@ -170,7 +171,7 @@ def _compute_heading_window_metrics(
     bl_heading = circmean(heading[bl_mask], low=-np.pi, high=np.pi)
 
     # H0 — net change: pre-stim mean → end of window
-    post_win_mask = (time >= end_t + after_s - 0.1) & (time <= end_t + after_s)
+    post_win_mask = (time >= end_t + after_s - _H0_WINDOW_S) & (time <= end_t + after_s)
     if post_win_mask.any():
         post_h = circmean(heading[post_win_mask], low=-np.pi, high=np.pi)
         hc_window_net = float(
