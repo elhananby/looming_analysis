@@ -14,6 +14,7 @@ from ._common import (
     add_stats_box,
     annotate_facet,
     build_hue_colormap,
+    draw_distribution_summary,
     grouped_offsets,
     iter_facets,
     suptitle,
@@ -424,14 +425,7 @@ def plot_response_latency(
             continue
 
         color = color_map[hv]
-        ax.hist(latencies, bins=bins, color=color, alpha=0.45, density=True)
-
-        p25, p50, p75 = (float(np.percentile(latencies, p)) for p in (25, 50, 75))
-        mean_val = float(np.mean(latencies))
-
-        ax.axvspan(p25, p75, color=color, alpha=0.12)
-        ax.axvline(p50, color=color, linestyle="-", linewidth=1.5)
-        ax.axvline(mean_val, color=color, linestyle="--", linewidth=1.5)
+        p25, p50, p75, mean_val = draw_distribution_summary(ax, latencies, color, bins=bins)
 
         name = hv if hv is not None else "all"
         legend_handles.append(Patch(facecolor=color, alpha=0.6, label=str(name)))

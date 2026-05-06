@@ -150,6 +150,25 @@ def build_hue_colormap(
     return result
 
 
+def draw_distribution_summary(
+    ax,
+    values: np.ndarray,
+    color,
+    bins: int = 50,
+) -> tuple[float, float, float, float]:
+    """Draw histogram with IQR band, median, and mean lines on *ax*.
+
+    Returns ``(p25, p50, p75, mean)`` so the caller can build its own stats string.
+    """
+    ax.hist(values, bins=bins, color=color, alpha=0.45, density=True)
+    p25, p50, p75 = (float(np.percentile(values, p)) for p in (25, 50, 75))
+    mean_val = float(np.mean(values))
+    ax.axvspan(p25, p75, color=color, alpha=0.12)
+    ax.axvline(p50, color=color, linestyle="-", linewidth=1.5)
+    ax.axvline(mean_val, color=color, linestyle="--", linewidth=1.5)
+    return p25, p50, p75, mean_val
+
+
 def grouped_offsets(n: int, width: float = 0.8) -> tuple[np.ndarray, float]:
     """Evenly-spaced per-group x-offsets that fit within *width*.
 

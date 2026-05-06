@@ -10,7 +10,7 @@ from matplotlib.figure import Figure
 from matplotlib.patches import Patch
 
 from .._types import Response
-from ._common import add_stats_box, build_hue_colormap, iter_hue_subsets, unique_values
+from ._common import add_stats_box, build_hue_colormap, draw_distribution_summary, iter_hue_subsets, unique_values
 
 
 def plot_inter_trigger_interval(
@@ -72,17 +72,7 @@ def plot_inter_trigger_interval(
         n_kept = len(itv)
         color = color_map[hv]
 
-        ax.hist(itv, bins=bins, color=color, alpha=0.45, density=True)
-
-        mean_val = float(np.mean(itv))
-        p25, p50, p75 = float(np.percentile(itv, 25)), float(np.percentile(itv, 50)), float(np.percentile(itv, 75))
-
-        # IQR shaded band
-        ax.axvspan(p25, p75, color=color, alpha=0.12)
-        # Median — solid
-        ax.axvline(p50, color=color, linestyle="-", linewidth=1.5)
-        # Mean — dashed
-        ax.axvline(mean_val, color=color, linestyle="--", linewidth=1.5)
+        p25, p50, p75, mean_val = draw_distribution_summary(ax, itv, color, bins=bins)
 
         name = hv if hv is not None else "all"
         label = str(name)
