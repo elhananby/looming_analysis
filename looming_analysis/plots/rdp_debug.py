@@ -46,7 +46,7 @@ def plot_rdp_debug(
     # Pre-compute the population mean peak time from responsive flies so
     # non-responsive trials use the same fallback as responsiveness.py.
     resp_saccade_times = [
-        r["saccade_peak_time_ms"] / 1000.0
+        r.get("saccade_peak_time_ms") / 1000.0
         for r in responsive
         if not np.isnan(r.get("saccade_peak_time_ms", float("nan")))
     ]

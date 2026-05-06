@@ -134,9 +134,9 @@ def filter_by_iti(
             f"with ITI < {min_iti_s} s  "
             f"(kept {len(kept)}, {100*len(kept)/total:.1f}%)"
         )
-        if dropped:
-            itv_dropped = [float(r["inter_trigger_interval"]) for r in dropped
-                           if r.get("inter_trigger_interval") is not None]
+        itv_dropped = [float(r["inter_trigger_interval"]) for r in dropped
+                       if r.get("inter_trigger_interval") is not None]
+        if itv_dropped:
             print(
                 f"  dropped ITI range: [{min(itv_dropped):.2f}, {max(itv_dropped):.2f}] s  "
                 f"median={float(np.median(itv_dropped)):.2f} s"

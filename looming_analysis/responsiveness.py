@@ -399,7 +399,7 @@ def classify_responsiveness(
 
         # Method 4 — angular impulse
         win_abs = ang_vel_abs[window_mask]
-        impulse = float(np.sum(trace[window_mask]) * dt)
+        impulse = float(np.nansum(win_abs) * dt)
         r["angular_impulse_deg"] = impulse
         r["is_responsive_impulse"] = impulse >= impulse_threshold_deg
         r["mean_ang_vel_window_deg_s"] = float(np.nanmean(win_abs)) if win_abs.size > 0 else float("nan")

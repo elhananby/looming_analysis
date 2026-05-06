@@ -44,7 +44,7 @@ def plot_peak_velocity(
     return plot_violin_facets(
         responses,
         value_fn=lambda r: (
-            r["peak_ang_vel_deg_s"]
+            r.get("peak_ang_vel_deg_s")
             if not np.isnan(r.get("peak_ang_vel_deg_s", float("nan")))
             else r.get("mean_ang_vel_window_deg_s")
         ),

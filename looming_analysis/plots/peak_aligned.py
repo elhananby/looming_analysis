@@ -139,15 +139,15 @@ def _draw_peak_aligned(
         )
         with np.errstate(all="ignore"):
             mean_tr = np.nanmean(traces, axis=0)
-            sem_tr = np.nanstd(traces, axis=0)
+            std_tr = np.nanstd(traces, axis=0)
 
         color = color_map.get(hv, "steelblue")
         label = f"{hv} (n={len(subset)})" if hv is not None else f"n={len(subset)}"
         ax.plot(time_axis, mean_tr, color=color, label=label)
         ax.fill_between(
             time_axis,
-            mean_tr - sem_tr,
-            mean_tr + sem_tr,
+            mean_tr - std_tr,
+            mean_tr + std_tr,
             alpha=0.2,
             color=color,
         )
@@ -295,7 +295,7 @@ def plot_latency_by_direction(
 
     # Place violins side-by-side within each offset bin.
     offsets_idx = {v: i for i, v in enumerate(abs_offsets)}
-    group_offsets, _ = grouped_offsets(n_groups, width=0.7)
+    group_offsets, violin_width = grouped_offsets(n_groups, width=0.7)
 
     fig, ax = plt.subplots(figsize=(max(ax_size[0], n_offsets * 1.5 * n_groups), ax_size[1]))
 
@@ -325,7 +325,7 @@ def plot_latency_by_direction(
         parts = ax.violinplot(
             data_per_pos,
             positions=positions,
-            widths=width * 0.9,
+            widths=violin_width * 0.9,
             showmedians=True,
             showextrema=False,
         )

@@ -51,7 +51,7 @@ def plot_heading_traces(
             data = np.stack([r["heading_deg"] for r in hue_subset])
             with np.errstate(all="ignore"):
                 mean_heading = np.nanmean(data, axis=0)
-                sem_heading = np.nanstd(data, axis=0)
+                std_heading = np.nanstd(data, axis=0)
             color = color_map.get(hv, "steelblue")
             label = (
                 f"{hv} (n={len(hue_subset)})"
@@ -61,8 +61,8 @@ def plot_heading_traces(
             ax.plot(time_axis, mean_heading, color=color, label=label)
             ax.fill_between(
                 time_axis,
-                mean_heading - sem_heading,
-                mean_heading + sem_heading,
+                mean_heading - std_heading,
+                mean_heading + std_heading,
                 color=color,
                 alpha=0.2,
             )

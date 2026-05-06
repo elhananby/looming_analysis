@@ -239,7 +239,7 @@ def extract_responses(
 
         stim_idx = abs(pre_frames)
         expansion_duration_ms = row.get("expansion_duration_ms", 500)
-        expansion_frames = int(expansion_duration_ms / 10)
+        expansion_frames = int(expansion_duration_ms / (DT_SECONDS * 1000))
 
         heading_change = _compute_heading_change(
             headings, stim_idx, stim_idx + expansion_frames, heading_ref_frames

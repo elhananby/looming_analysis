@@ -98,7 +98,7 @@ def run_from_config(
     file_groups = load_files_configs(files_config_paths)
     config = load_analysis_config(analysis_config)
     output_dir = build_output_dir(output_root, file_groups, suffix=suffix)
-    output_dir.mkdir(parents=True, exist_ok=False)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     analysis_kwargs = dict(config["analysis"])
     min_iti_s = analysis_kwargs.pop("min_iti_s", None)

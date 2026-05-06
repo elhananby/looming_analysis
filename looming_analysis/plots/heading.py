@@ -10,7 +10,7 @@ from matplotlib.figure import Figure
 from matplotlib.patches import Patch
 
 from .._types import Response
-from ._common import plot_violin_facets
+from ._common import plot_violin_facets, unique_values
 
 
 def plot_heading_changes(
@@ -104,8 +104,6 @@ def plot_heading_change_comparison(
 
     if figsize is None:
         figsize = (16, 10)
-
-    from ._common import unique_values
 
     n_metrics = len(_HEADING_METRICS)
     groups = unique_values(responses, group_by) or [None]

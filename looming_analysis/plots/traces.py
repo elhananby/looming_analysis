@@ -55,7 +55,7 @@ def _draw_sham_baseline(
         data = prepare_ang_vel(sham_subset, time_axis, baseline_subtract)
         with np.errstate(all="ignore"):
             mean_resp = np.nanmean(data, axis=0)
-            sem_resp = np.nanstd(data, axis=0)
+            std_resp = np.nanstd(data, axis=0)
 
         color = color_map.get(hv, "steelblue")
         label = (
@@ -66,8 +66,8 @@ def _draw_sham_baseline(
         ax.plot(time_axis, mean_resp, color=color, label=label, linestyle=":")
         ax.fill_between(
             time_axis,
-            mean_resp - sem_resp,
-            mean_resp + sem_resp,
+            mean_resp - std_resp,
+            mean_resp + std_resp,
             alpha=0.1,
             color=color,
         )
@@ -89,15 +89,15 @@ def _draw_traces(
         data = prepare_ang_vel(subset, time_axis, baseline_subtract)
         with np.errstate(all="ignore"):
             mean_resp = np.nanmean(data, axis=0)
-            sem_resp = np.nanstd(data, axis=0)
+            std_resp = np.nanstd(data, axis=0)
 
         color = color_map.get(hv, "steelblue")
         label = f"{hv} (n={len(subset)})" if hv is not None else f"n={len(subset)}"
         ax.plot(time_axis, mean_resp, color=color, label=label)
         ax.fill_between(
             time_axis,
-            mean_resp - sem_resp,
-            mean_resp + sem_resp,
+            mean_resp - std_resp,
+            mean_resp + std_resp,
             alpha=0.2,
             color=color,
         )

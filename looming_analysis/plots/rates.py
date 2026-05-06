@@ -101,7 +101,7 @@ def _draw_grouped_bars(
     hue_vals,
     color_map,
 ):
-    all_offsets, bar_width = grouped_offsets(max(len(hue_vals), 1))
+    all_offsets, bar_width = grouped_offsets(max(len(hue_vals), 1), width=0.8)
     x_positions = np.arange(len(x_vals))
 
     for i, hv in enumerate(hue_vals):
