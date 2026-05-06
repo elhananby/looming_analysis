@@ -4,12 +4,21 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
+
 if TYPE_CHECKING:
-    import numpy as np
     from typing import Optional
 
 
 DT_SECONDS = 0.01  # 100 Hz sampling rate
+
+
+def _circ_diff_deg(
+    a_rad: float | np.ndarray,
+    b_rad: float | np.ndarray,
+) -> float | np.ndarray:
+    """Signed circular difference (a − b) in degrees, range (−180, 180]."""
+    return np.rad2deg(np.arctan2(np.sin(a_rad - b_rad), np.cos(a_rad - b_rad)))
 
 
 class Response(dict):

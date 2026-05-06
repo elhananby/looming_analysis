@@ -9,7 +9,7 @@ import numpy as np
 import polars as pl
 from scipy.stats import circmean
 
-from ._types import DT_SECONDS, Response
+from ._types import DT_SECONDS, Response, _circ_diff_deg
 from .io import load_braidz, load_trigger_config
 from .signal import calculate_angular_velocity
 
@@ -55,14 +55,7 @@ def _compute_heading_change_vector(
         return float("nan")
     before_angle = np.arctan2(np.mean(pre_y), np.mean(pre_x))
     after_angle = np.arctan2(np.mean(post_y), np.mean(post_x))
-    return float(
-        np.rad2deg(
-            np.arctan2(
-                np.sin(after_angle - before_angle),
-                np.cos(after_angle - before_angle),
-            )
-        )
-    )
+    return float(_circ_diff_deg(after_angle, before_angle))
 
 
 def _compute_rdp_turn_angle(
@@ -113,11 +106,7 @@ def _compute_rdp_turn_angle(
         v_out = simplified[nearest + 1] - simplified[nearest]
         a_in = np.arctan2(v_in[1], v_in[0])
         a_out = np.arctan2(v_out[1], v_out[0])
-        angle = float(
-            np.rad2deg(
-                np.arctan2(np.sin(a_out - a_in), np.cos(a_out - a_in))
-            )
-        )
+        angle = float(_circ_diff_deg(a_out, a_in))
 
     return {
         "angle": angle,
@@ -153,14 +142,7 @@ def _compute_heading_change(
         warnings.simplefilter("ignore", RuntimeWarning)
         heading_after = circmean(post_window, low=-np.pi, high=np.pi)
 
-    return float(
-        np.rad2deg(
-            np.arctan2(
-                np.sin(heading_after - heading_before),
-                np.cos(heading_after - heading_before),
-            )
-        )
-    )
+    return float(_circ_diff_deg(heading_after, heading_before))
 
 
 def extract_responses(

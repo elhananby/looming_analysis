@@ -8,7 +8,7 @@ import numpy as np
 from scipy.signal import find_peaks
 from scipy.stats import circmean
 
-from ._types import DT_SECONDS, Response
+from ._types import DT_SECONDS, Response, _circ_diff_deg
 from .extract import _compute_heading_change_vector, _compute_rdp_turn_angle
 
 _PEAK_KW = dict(height=0.0, prominence=300, width=(3, 8), distance=5)
@@ -174,22 +174,13 @@ def _compute_heading_window_metrics(
     post_win_mask = (time >= end_t + after_s - _H0_WINDOW_S) & (time <= end_t + after_s)
     if post_win_mask.any():
         post_h = circmean(heading[post_win_mask], low=-np.pi, high=np.pi)
-        hc_window_net = float(
-            np.rad2deg(np.arctan2(np.sin(post_h - bl_heading), np.cos(post_h - bl_heading)))
-        )
+        hc_window_net = float(_circ_diff_deg(post_h, bl_heading))
     else:
         hc_window_net = float("nan")
 
     # H1 — max circular deviation from pre-stim baseline in window
     if window_mask.any():
-        devs = np.abs(
-            np.rad2deg(
-                np.arctan2(
-                    np.sin(heading[window_mask] - bl_heading),
-                    np.cos(heading[window_mask] - bl_heading),
-                )
-            )
-        )
+        devs = np.abs(_circ_diff_deg(heading[window_mask], bl_heading))
         hc_max_dev = float(np.nanmax(devs))
     else:
         hc_max_dev = float("nan")
@@ -202,9 +193,7 @@ def _compute_heading_window_metrics(
         if pre_sac.any() and post_sac.any():
             h_pre = circmean(heading[pre_sac], low=-np.pi, high=np.pi)
             h_post = circmean(heading[post_sac], low=-np.pi, high=np.pi)
-            hc_post_saccade = float(
-                np.rad2deg(np.arctan2(np.sin(h_post - h_pre), np.cos(h_post - h_pre)))
-            )
+            hc_post_saccade = float(_circ_diff_deg(h_post, h_pre))
         else:
             hc_post_saccade = float("nan")
     else:
@@ -213,9 +202,7 @@ def _compute_heading_window_metrics(
     # H3 — total rotation (path length) in window
     win_heading = heading[window_mask]
     if win_heading.size > 1:
-        diffs = np.abs(
-            np.rad2deg(np.arctan2(np.sin(np.diff(win_heading)), np.cos(np.diff(win_heading))))
-        )
+        diffs = np.abs(_circ_diff_deg(win_heading[1:], win_heading[:-1]))
         hc_path_length = float(np.sum(diffs))
     else:
         hc_path_length = float("nan")
@@ -249,9 +236,7 @@ def _apply_peak_aligned_metrics(
                 warnings.simplefilter("ignore", RuntimeWarning)
                 h_pre = circmean(pre_pk, low=-np.pi, high=np.pi)
                 h_post = circmean(post_pk, low=-np.pi, high=np.pi)
-            hc_peak_aligned = float(
-                np.rad2deg(np.arctan2(np.sin(h_post - h_pre), np.cos(h_post - h_pre)))
-            )
+            hc_peak_aligned = float(_circ_diff_deg(h_post, h_pre))
         else:
             hc_peak_aligned = float("nan")
 
