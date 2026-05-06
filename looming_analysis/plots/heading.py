@@ -66,6 +66,7 @@ _HEADING_METRICS = [
     ("heading_change_peak_aligned", "Peak\n(circmean)", True),
     ("heading_change_stim_vector", "Stim\n(vector)", True),
     ("heading_change_peak_vector", "Peak\n(vector)", True),
+    ("heading_change_rdp", "Peak\n(RDP)", True),
 ]
 
 

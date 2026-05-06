@@ -60,6 +60,7 @@ class ResponsivenessConfig:
     heading_threshold_deg: float = 30.0
     impulse_threshold_deg: float = 20.0
     method: str = "combined"
+    rdp_epsilon: float = 0.5
 
     def as_kwargs(self) -> dict:
         return {
@@ -70,4 +71,5 @@ class ResponsivenessConfig:
             "heading_threshold_deg": self.heading_threshold_deg,
             "impulse_threshold_deg": self.impulse_threshold_deg,
             "method": self.method,
+            "rdp_epsilon": self.rdp_epsilon,
         }

@@ -190,6 +190,9 @@ hue_by = "group"
         def plot_heading_change_comparison(self, **kwargs):
             return FakeFigure("heading-change-comparison")
 
+        def plot_rdp_debug(self, **kwargs):
+            return FakeFigure("rdp-debug")
+
         def plot_inter_trigger_interval(self, **kwargs):
             return FakeFigure("inter-trigger-interval")
 

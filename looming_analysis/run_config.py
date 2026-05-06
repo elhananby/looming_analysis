@@ -174,6 +174,11 @@ def run_from_config(
         "heading-change-comparison.png": result.plot_heading_change_comparison(
             group_by=hue_by,
         ),
+        "rdp-debug.png": result.plot_rdp_debug(
+            epsilon=plots.get("rdp_epsilon", 0.5),
+            n_responsive=plots.get("rdp_n_responsive", 3),
+            n_nonresponsive=plots.get("rdp_n_nonresponsive", 3),
+        ),
     }
     for filename, fig in figures.items():
         fig.savefig(output_dir / filename, dpi=150, bbox_inches="tight")

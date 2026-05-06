@@ -12,8 +12,10 @@ dependencies = [
     "polars>=1.39.3",
     "pyarrow>=23.0.1",
     "pynumdiff>=0.2.2",
+    "rdp>=0.8",
     "scipy>=1.17.1",
     "seaborn>=0.13.2",
+    "tqdm>=4.67.3",
 ]
 
 [project.scripts]
