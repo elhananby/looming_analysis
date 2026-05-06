@@ -150,6 +150,17 @@ def build_hue_colormap(
     return result
 
 
+def grouped_offsets(n: int, width: float = 0.8) -> tuple[np.ndarray, float]:
+    """Evenly-spaced per-group x-offsets that fit within *width*.
+
+    Returns ``(offsets, bar_width)`` where *offsets* has shape ``(n,)`` and
+    ``offsets[i]`` is the x-shift for group *i* relative to the tick centre.
+    """
+    bar_width = width / max(n, 1)
+    offsets = np.linspace(-(n - 1) / 2, (n - 1) / 2, n) * bar_width
+    return offsets, bar_width
+
+
 def prepare_ang_vel(
     responses: list[Response],
     time_axis: np.ndarray,

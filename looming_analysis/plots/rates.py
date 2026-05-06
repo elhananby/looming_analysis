@@ -9,7 +9,7 @@ import numpy as np
 from matplotlib.figure import Figure
 
 from .._types import Response
-from ._common import build_hue_colormap, effective_axis, require_responsiveness, unique_values
+from ._common import build_hue_colormap, effective_axis, grouped_offsets, require_responsiveness, unique_values
 
 
 def plot_responsiveness_rates(
@@ -101,8 +101,7 @@ def _draw_grouped_bars(
     hue_vals,
     color_map,
 ):
-    n_hue = max(len(hue_vals), 1)
-    bar_width = 0.8 / n_hue
+    all_offsets, bar_width = grouped_offsets(max(len(hue_vals), 1))
     x_positions = np.arange(len(x_vals))
 
     for i, hv in enumerate(hue_vals):
@@ -121,7 +120,7 @@ def _draw_grouped_bars(
             rates.append(100 * n_resp / n_total if n_total > 0 else 0.0)
             ns.append(n_total)
 
-        offset = i * bar_width - (n_hue - 1) * bar_width / 2 if hue_by else 0
+        offset = all_offsets[i] if hue_by else 0
         color = color_map[hv]
         label = str(hv) if hv is not None else None
         bars = ax.bar(

@@ -14,6 +14,7 @@ from ._common import (
     add_stats_box,
     annotate_facet,
     build_hue_colormap,
+    grouped_offsets,
     iter_facets,
     suptitle,
     unique_values,
@@ -292,9 +293,8 @@ def plot_latency_by_direction(
     n_groups = len(hue_vals)
 
     # Place violins side-by-side within each offset bin.
-    width = 0.7 / max(n_groups, 1)
     offsets_idx = {v: i for i, v in enumerate(abs_offsets)}
-    group_offsets = np.linspace(-(n_groups - 1) / 2, (n_groups - 1) / 2, n_groups) * width
+    group_offsets, _ = grouped_offsets(n_groups, width=0.7)
 
     fig, ax = plt.subplots(figsize=(max(ax_size[0], n_offsets * 1.5 * n_groups), ax_size[1]))
 
