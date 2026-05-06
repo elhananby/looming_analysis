@@ -37,5 +37,4 @@ def test_responsiveness_config_as_kwargs():
         "heading_threshold_deg": 45.0,
         "impulse_threshold_deg": 20.0,
         "method": "heading",
-        "rdp_epsilon": 0.5,
     }

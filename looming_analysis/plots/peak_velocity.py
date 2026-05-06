@@ -8,7 +8,7 @@ import numpy as np
 from matplotlib.figure import Figure
 
 from .._types import Response
-from ._common import plot_violin_facets
+from ._common import filter_real, plot_violin_facets
 
 
 def plot_peak_velocity(
@@ -18,6 +18,7 @@ def plot_peak_velocity(
     col_by: Optional[str] = None,
     hue_by: Optional[str] = None,
     responsive_only: bool = False,
+    exclude_sham: bool = True,
     ax_size: tuple[float, float] = (7, 5),
 ) -> Figure:
     """Violin plot of peak |angular velocity| from saccade detection.
@@ -41,6 +42,8 @@ def plot_peak_velocity(
     Returns:
         The matplotlib Figure.
     """
+    if exclude_sham:
+        responses = filter_real(responses)
     return plot_violin_facets(
         responses,
         value_fn=lambda r: (

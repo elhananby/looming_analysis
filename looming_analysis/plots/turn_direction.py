@@ -10,7 +10,7 @@ from matplotlib.figure import Figure
 from matplotlib.patches import Patch
 
 from .._types import Response
-from ._common import effective_axis
+from ._common import effective_axis, filter_real
 
 _LEFT_COLOR = "#4878D0"
 _RIGHT_COLOR = "#EE854A"
@@ -23,6 +23,7 @@ def plot_turn_proportions(
     row_by: Optional[str] = None,
     col_by: Optional[str] = None,
     responsive_only: bool = False,
+    exclude_sham: bool = True,
     ax_size: tuple[float, float] = (6, 4),
 ) -> Figure:
     """100 % stacked bar chart of turn direction (left / right) per condition.
@@ -54,6 +55,8 @@ def plot_turn_proportions(
             "Call compute_turn_direction(responses) before plotting turn proportions."
         )
 
+    if exclude_sham:
+        responses = filter_real(responses)
     if responsive_only:
         responses = [r for r in responses if r.get("is_responsive")]
 

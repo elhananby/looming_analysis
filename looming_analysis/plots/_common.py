@@ -12,6 +12,11 @@ from matplotlib.figure import Figure
 from .._types import Response
 
 
+def filter_real(responses: list[Response]) -> list[Response]:
+    """Return only non-sham trials (where is_sham is falsy or absent)."""
+    return [r for r in responses if not r.get("is_sham")]
+
+
 def add_stats_box(ax, lines: list[str], *, loc: str = "upper left") -> None:
     """Render compact per-group summary stats without expanding the axes."""
     if not lines:

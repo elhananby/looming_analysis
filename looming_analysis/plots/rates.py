@@ -9,7 +9,7 @@ import numpy as np
 from matplotlib.figure import Figure
 
 from .._types import Response
-from ._common import build_hue_colormap, effective_axis, grouped_offsets, require_responsiveness, unique_values
+from ._common import build_hue_colormap, effective_axis, filter_real, grouped_offsets, require_responsiveness, unique_values
 
 
 def plot_responsiveness_rates(
@@ -18,6 +18,7 @@ def plot_responsiveness_rates(
     row_by: Optional[str] = None,
     col_by: Optional[str] = None,
     hue_by: Optional[str] = None,
+    exclude_sham: bool = True,
     ax_size: tuple[float, float] = (7, 5),
 ) -> Figure:
     """Bar chart of the percentage of responsive trials.
@@ -41,6 +42,8 @@ def plot_responsiveness_rates(
         The matplotlib Figure.
     """
     require_responsiveness(responses)
+    if exclude_sham:
+        responses = filter_real(responses)
 
     effective_rows, n_rows = effective_axis(responses, row_by)
     effective_x, _ = effective_axis(responses, col_by)

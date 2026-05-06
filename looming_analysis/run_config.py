@@ -172,6 +172,9 @@ def run_from_config(
             col_by=col_by,
         ),
     }
+    if any(r.get("is_sham") for r in result.responses):
+        figures["sham-vs-real.png"] = result.plot_sham_vs_real(col_by=col_by, hue_by=hue_by)
+
     for filename, fig in figures.items():
         fig.savefig(output_dir / filename, dpi=150, bbox_inches="tight")
 

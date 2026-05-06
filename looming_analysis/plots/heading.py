@@ -10,7 +10,7 @@ from matplotlib.figure import Figure
 from matplotlib.patches import Patch
 
 from .._types import Response
-from ._common import plot_violin_facets, unique_values
+from ._common import filter_real, plot_violin_facets, unique_values
 
 
 def plot_heading_changes(
@@ -21,6 +21,7 @@ def plot_heading_changes(
     hue_by: Optional[str] = None,
     absolute: bool = False,
     responsive_only: bool = False,
+    exclude_sham: bool = True,
     ax_size: tuple[float, float] = (7, 5),
 ) -> Figure:
     """Violin plot of heading changes.
@@ -42,6 +43,8 @@ def plot_heading_changes(
     Returns:
         The matplotlib Figure.
     """
+    if exclude_sham:
+        responses = filter_real(responses)
     value_fn = (
         (lambda r: abs(r["heading_change"]))
         if absolute
@@ -244,6 +247,7 @@ def plot_heading_changes_polar(
     field: str = "heading_change",
     n_bins: int = 36,
     responsive_only: bool = False,
+    exclude_sham: bool = True,
     ax_size: tuple[float, float] = (5, 5),
 ) -> Figure:
     """Polar histogram of heading changes with 0 degrees at north (top).
@@ -262,6 +266,8 @@ def plot_heading_changes_polar(
     """
     from ._common import build_hue_colormap, unique_values
 
+    if exclude_sham:
+        responses = filter_real(responses)
     if responsive_only:
         responses = [r for r in responses if r.get("is_responsive")]
 

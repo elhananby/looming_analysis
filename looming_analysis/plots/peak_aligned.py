@@ -15,6 +15,7 @@ from ._common import (
     annotate_facet,
     build_hue_colormap,
     draw_distribution_summary,
+    filter_real,
     grouped_offsets,
     iter_facets,
     suptitle,
@@ -167,6 +168,7 @@ def plot_peak_aligned_traces(
     col_by: Optional[str] = None,
     hue_by: Optional[str] = "group",
     responsive_only: bool = False,
+    exclude_sham: bool = True,
     sharey: bool = True,
     ax_size: tuple[float, float] = (5, 4),
 ) -> Figure:
@@ -206,6 +208,8 @@ def plot_peak_aligned_traces(
     n_samples = int(round(2 * half_window_ms / (dt_s * 1000))) + 1
     time_axis = np.linspace(-half_window_ms, half_window_ms, n_samples) / 1000.0
 
+    if exclude_sham:
+        responses = filter_real(responses)
     if responsive_only:
         responses = [r for r in responses if r.get("is_responsive")]
 
@@ -258,6 +262,7 @@ def plot_latency_by_direction(
     *,
     hue_by: Optional[str] = "group",
     fallback_window_ms: float = 200.0,
+    exclude_sham: bool = True,
     ax_size: tuple[float, float] = (7, 4),
 ) -> Figure:
     """Mean ± SEM response latency as a function of absolute stimulus direction.
@@ -274,6 +279,8 @@ def plot_latency_by_direction(
         fallback_window_ms: Passed to ``compute_peak_latency`` if needed.
         ax_size: Figure size ``(width, height)`` in inches.
     """
+    if exclude_sham:
+        responses = filter_real(responses)
     compute_peak_latency(responses, fallback_window_ms=fallback_window_ms)
 
     # Restrict to responsive trials with a valid saccade peak.
@@ -361,6 +368,7 @@ def plot_response_latency(
     hue_by: Optional[str] = "group",
     bins: int = 40,
     responsive_only: bool = True,
+    exclude_sham: bool = True,
     fallback_window_ms: float = 200.0,
     ax_size: tuple[float, float] = (7, 4),
 ) -> Figure:
@@ -385,6 +393,8 @@ def plot_response_latency(
             ``peak_latency_ms`` is not already set.
         ax_size: Figure size ``(width, height)`` in inches.
     """
+    if exclude_sham:
+        responses = filter_real(responses)
     plot_responses = responses
     if responsive_only:
         plot_responses = [

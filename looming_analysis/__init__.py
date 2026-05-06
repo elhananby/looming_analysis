@@ -18,6 +18,7 @@ from .plots import (
     plot_responses_by_responsiveness,
     plot_responsiveness_rates,
     plot_screen_position_effect,
+    plot_sham_vs_real,
     plot_turn_proportions,
 )
 from .pipeline import AnalysisResult, normalize_file_selection, run_analysis
@@ -49,6 +50,7 @@ __all__ = [
     "plot_responses_by_responsiveness",
     "plot_responsiveness_rates",
     "plot_screen_position_effect",
+    "plot_sham_vs_real",
     "plot_turn_proportions",
     "process_all_files",
     "process_file_groups",

@@ -9,7 +9,7 @@ import numpy as np
 from matplotlib.figure import Figure
 
 from .._types import Response
-from ._common import annotate_facet, build_hue_colormap, iter_facets, iter_hue_subsets, unique_values
+from ._common import annotate_facet, build_hue_colormap, filter_real, iter_facets, iter_hue_subsets, unique_values
 
 
 def plot_heading_traces(
@@ -19,9 +19,12 @@ def plot_heading_traces(
     col_by: Optional[str] = None,
     hue_by: Optional[str] = None,
     sharey: bool = True,
+    exclude_sham: bool = True,
     ax_size: tuple[float, float] = (5, 4),
 ) -> Figure:
     """Faceted mean heading direction traces over time."""
+    if exclude_sham:
+        responses = filter_real(responses)
     if responses and "heading_deg" not in responses[0]:
         raise ValueError(
             "Responses do not include 'heading_deg'. "

@@ -12,6 +12,7 @@ from .._types import Response
 from ._common import (
     annotate_facet,
     build_hue_colormap,
+    filter_real,
     iter_facets,
     prepare_ang_vel,
     require_responsiveness,
@@ -117,6 +118,7 @@ def plot_responses(
     baseline_subtract: bool = True,
     sharey: bool = True,
     show_sham_baseline: bool = False,
+    exclude_sham: bool = True,
     ax_size: tuple[float, float] = (5, 4),
 ) -> Figure:
     """Faceted mean ± SEM `|angular velocity|` over time.
@@ -136,6 +138,10 @@ def plot_responses(
     Returns:
         The matplotlib Figure. The caller is responsible for display/save.
     """
+    all_responses = responses
+    if exclude_sham:
+        responses = filter_real(responses)
+
     row_vals = unique_values(responses, row_by)
     col_vals = unique_values(responses, col_by)
     n_rows = len(row_vals) if row_vals else 1
@@ -164,7 +170,7 @@ def plot_responses(
             if show_sham_baseline:
                 _draw_sham_baseline(
                     ax,
-                    responses,
+                    all_responses,
                     row_by=row_by,
                     row_val=row_val,
                     col_by=col_by,
@@ -187,6 +193,7 @@ def plot_responses_by_responsiveness(
     hue_by: Optional[str] = None,
     baseline_subtract: bool = True,
     sharey: bool = True,
+    exclude_sham: bool = True,
     ax_size: tuple[float, float] = (5, 4),
 ) -> Figure:
     """2-row grid (responsive / non-responsive) × `col_by` columns.
@@ -206,6 +213,8 @@ def plot_responses_by_responsiveness(
         The matplotlib Figure.
     """
     require_responsiveness(responses)
+    if exclude_sham:
+        responses = filter_real(responses)
 
     col_vals = unique_values(responses, col_by)
     n_cols = len(col_vals) if col_vals else 1

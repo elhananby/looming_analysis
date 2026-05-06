@@ -7,6 +7,7 @@ from .peak_aligned import plot_latency_by_direction, plot_peak_aligned_traces, p
 from .peak_velocity import plot_peak_velocity
 from .rates import plot_responsiveness_rates
 from .screen_position import plot_screen_position_effect
+from .sham import plot_sham_vs_real
 from .traces import plot_responses, plot_responses_by_responsiveness
 from .turn_direction import plot_turn_proportions
 from . import debug
@@ -24,6 +25,7 @@ __all__ = [
     "plot_responses_by_responsiveness",
     "plot_responsiveness_rates",
     "plot_screen_position_effect",
+    "plot_sham_vs_real",
     "plot_turn_proportions",
     "debug",
 ]

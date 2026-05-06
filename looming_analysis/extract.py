@@ -222,12 +222,13 @@ def extract_responses(
             "yvel": yvel,
             "heading": headings,
             "heading_deg": heading_deg,
+            "is_sham": is_sham,
             "end_expansion_time": expansion_frames * dt,
             "time": (df_res["frame"].to_numpy() - stim_frame) * dt,
             **{
                 key: val
                 for key, val in row.items()
-                if key not in ["frame", "timestamp", "obj_id", "xvel", "yvel"]
+                if key not in ["frame", "timestamp", "obj_id", "xvel", "yvel", "is_sham"]
             },
         }
         responses.append(response_data)
