@@ -10,7 +10,7 @@ from matplotlib.figure import Figure
 from matplotlib.patches import Patch
 
 from .._types import Response
-from ._common import add_stats_box, build_hue_colormap, unique_values
+from ._common import add_stats_box, build_hue_colormap, iter_hue_subsets, unique_values
 
 
 def plot_inter_trigger_interval(
@@ -41,7 +41,6 @@ def plot_inter_trigger_interval(
     """
     fig, ax = plt.subplots(figsize=ax_size)
     color_map = build_hue_colormap(responses, hue_by)
-    hue_vals = unique_values(responses, hue_by) if hue_by else [None]
 
     # Compute global cutoff across all groups so axes are comparable.
     cutoff: Optional[float] = None
@@ -57,11 +56,7 @@ def plot_inter_trigger_interval(
 
     legend_handles = []
     stats_lines: list[str] = []
-    for hv in hue_vals:
-        subset = [
-            r for r in responses
-            if (hue_by is None or r.get(hue_by) == hv)
-        ]
+    for hv, subset in iter_hue_subsets(responses, hue_by):
         itv = [
             float(r["inter_trigger_interval"])
             for r in subset
@@ -103,11 +98,7 @@ def plot_inter_trigger_interval(
     # Inset: zoom into 0–inset_max_s to show the refractory-period region.
     # Always rendered; uses unclipped data so short intervals are never hidden.
     ax_ins = ax.inset_axes([0.55, 0.35, 0.42, 0.58])
-    for hv in hue_vals:
-        subset = [
-            r for r in responses
-            if (hue_by is None or r.get(hue_by) == hv)
-        ]
+    for hv, subset in iter_hue_subsets(responses, hue_by):
         itv_all = np.array(
             [float(r["inter_trigger_interval"]) for r in subset
              if r.get("inter_trigger_interval") is not None

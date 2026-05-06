@@ -94,6 +94,24 @@ def iter_facets(
             yield rv, cv, subset, (ri, ci, n_rows, n_cols)
 
 
+def iter_hue_subsets(
+    responses: list[Response],
+    hue_by: Optional[str],
+) -> Iterator[tuple[Any, list[Response]]]:
+    """Yield ``(hue_val, subset)`` pairs for every distinct value of *hue_by*.
+
+    When *hue_by* is ``None``, yields a single ``(None, responses)`` pair.
+    """
+    hue_vals = unique_values(responses, hue_by) if hue_by else [None]
+    for hv in hue_vals:
+        subset = (
+            responses
+            if hue_by is None
+            else [r for r in responses if r.get(hue_by) == hv]
+        )
+        yield hv, subset
+
+
 def build_hue_colormap(
     responses: list[Response],
     hue_by: Optional[str],

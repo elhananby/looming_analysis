@@ -9,7 +9,7 @@ import numpy as np
 from matplotlib.figure import Figure
 
 from .._types import Response
-from ._common import annotate_facet, build_hue_colormap, iter_facets, unique_values
+from ._common import annotate_facet, build_hue_colormap, iter_facets, iter_hue_subsets, unique_values
 
 
 def plot_heading_traces(
@@ -44,11 +44,7 @@ def plot_heading_traces(
 
     for row_val, col_val, subset, position in iter_facets(responses, row_by, col_by):
         ax = axes[position[0], position[1]]
-        hue_vals = unique_values(subset, hue_by) if hue_by else [None]
-        for hv in hue_vals:
-            hue_subset = (
-                subset if hue_by is None else [r for r in subset if r.get(hue_by) == hv]
-            )
+        for hv, hue_subset in iter_hue_subsets(subset, hue_by):
             if not hue_subset:
                 continue
             time_axis = hue_subset[0]["time"]

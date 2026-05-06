@@ -16,6 +16,7 @@ from ._common import (
     prepare_ang_vel,
     require_responsiveness,
     suptitle,
+    iter_hue_subsets,
     unique_values,
 )
 
@@ -80,17 +81,7 @@ def _draw_traces(
     baseline_subtract: bool,
 ) -> None:
     """Draw mean ± SEM angular velocity traces on `ax`, split by hue_by."""
-    if hue_by is None:
-        hue_vals: list = [None]
-    else:
-        hue_vals = unique_values(responses, hue_by)
-
-    for hv in hue_vals:
-        subset = (
-            responses
-            if hue_by is None
-            else [r for r in responses if r.get(hue_by) == hv]
-        )
+    for hv, subset in iter_hue_subsets(responses, hue_by):
         if not subset:
             continue
 
