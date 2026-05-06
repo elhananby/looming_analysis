@@ -3,94 +3,42 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
-from typing import Literal
-
-from matplotlib.figure import Figure
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from ._types import Response
-from .config import AnalysisConfig, ResponsivenessConfig
+from .config import AnalysisConfig, ResponsivenessConfig, RunConfig
 from .dataframe import responses_to_dataframe
 from .extract import process_file_groups
-from .plots import (
-    plot_heading_changes,
-    plot_heading_changes_polar,
-    plot_heading_traces,
-    plot_inter_trigger_interval,
-    plot_peak_aligned_traces,
-    plot_peak_velocity,
-    plot_responses,
-    plot_responses_by_responsiveness,
-    plot_responsiveness_rates,
-    plot_screen_position_effect,
-    plot_sham_vs_real,
-    plot_turn_proportions,
-)
-from .plots.peak_aligned import compute_peak_latency, plot_latency_by_direction, plot_response_latency
 from .responsiveness import classify_responsiveness, compute_turn_direction
+
+if TYPE_CHECKING:
+    pass
 
 
 @dataclass
 class AnalysisResult:
-    """Container returned by `run_analysis`."""
+    """Container returned by `run_analysis`.
+
+    Use the top-level ``plot_*(result.responses, ...)`` functions to visualise
+    results — e.g. ``plot_responses(result.responses, col_by="stimulus_offset_deg")``.
+    """
 
     responses: list[Response]
+    config: RunConfig | None = field(default=None, repr=False)
 
-    def to_dataframe(
-        self, kind: Literal["scalar", "long"] = "scalar", backend: str = "polars"
-    ):
+    def to_dataframe(self, kind: str = "scalar", backend: str = "polars"):
         return responses_to_dataframe(self.responses, kind=kind, backend=backend)
 
-    def plot_traces(self, **kwargs) -> Figure:
-        return plot_responses(self.responses, **kwargs)
-
-    def plot_heading_traces(self, **kwargs) -> Figure:
-        return plot_heading_traces(self.responses, **kwargs)
-
-    def plot_responsiveness_rates(self, **kwargs) -> Figure:
-        return plot_responsiveness_rates(self.responses, **kwargs)
-
-    def plot_responsive_traces(self, **kwargs) -> Figure:
-        return plot_responses_by_responsiveness(self.responses, **kwargs)
-
-    def plot_heading_changes(self, **kwargs) -> Figure:
-        return plot_heading_changes(self.responses, **kwargs)
-
-    def plot_heading_changes_polar(self, **kwargs) -> Figure:
-        return plot_heading_changes_polar(self.responses, **kwargs)
-
-    def plot_peak_velocity(self, **kwargs) -> Figure:
-        return plot_peak_velocity(self.responses, **kwargs)
-
-    def plot_turn_proportions(self, **kwargs) -> Figure:
-        return plot_turn_proportions(self.responses, **kwargs)
-
-    def plot_inter_trigger_interval(self, **kwargs) -> Figure:
-        return plot_inter_trigger_interval(self.responses, **kwargs)
-
-    def plot_peak_aligned_traces(self, **kwargs) -> Figure:
-        return plot_peak_aligned_traces(self.responses, **kwargs)
-
-    def plot_response_latency(self, **kwargs) -> Figure:
-        return plot_response_latency(self.responses, **kwargs)
-
-    def plot_latency_by_direction(self, **kwargs) -> Figure:
-        return plot_latency_by_direction(self.responses, **kwargs)
-
-    def plot_screen_position_effect(self, **kwargs) -> Figure:
-        return plot_screen_position_effect(self.responses, **kwargs)
-
-    def plot_sham_vs_real(self, **kwargs) -> Figure:
-        return plot_sham_vs_real(self.responses, **kwargs)
-
     def compute_peak_latency(self, **kwargs) -> "AnalysisResult":
+        from .plots.peak_aligned import compute_peak_latency
         compute_peak_latency(self.responses, **kwargs)
         return self
 
     def filter_by_iti(self, min_iti_s: float, *, verbose: bool = True) -> "AnalysisResult":
         """Return a new AnalysisResult dropping trials with ITI < min_iti_s."""
         filtered = filter_by_iti(self.responses, min_iti_s, verbose=verbose)
-        return AnalysisResult(filtered)
+        return AnalysisResult(filtered, self.config)
 
 
 def filter_by_iti(
@@ -103,15 +51,6 @@ def filter_by_iti(
 
     Trials with a missing or NaN ITI (the first trigger in each file) are
     always kept — they cannot have violated the threshold.
-
-    Args:
-        responses: Response list with ``inter_trigger_interval`` set.
-        min_iti_s: Minimum allowed ITI in seconds.  Trials triggered sooner
-            after the previous one are dropped.
-        verbose: If True, print a summary of how many trials were dropped.
-
-    Returns:
-        Filtered list (new list, original is not modified).
     """
     kept, dropped = [], []
     for r in responses:

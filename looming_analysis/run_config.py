@@ -5,13 +5,25 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
-import tomllib
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Sequence
 
-from .config import AnalysisConfig, ResponsivenessConfig
+from .config import AnalysisConfig, ResponsivenessConfig, RunConfig
 from .pipeline import AnalysisResult, filter_by_iti, run_analysis
+from .plots import (
+    plot_heading_changes,
+    plot_heading_changes_polar,
+    plot_heading_traces,
+    plot_inter_trigger_interval,
+    plot_peak_velocity,
+    plot_responses,
+    plot_responsiveness_rates,
+    plot_screen_position_effect,
+    plot_sham_vs_real,
+    plot_turn_proportions,
+)
+from .plots.peak_aligned import plot_latency_by_direction, plot_response_latency
 
 
 FilesConfigPath = str | Path
@@ -58,18 +70,6 @@ def _normalize_files_config_paths(
     return list(files_config)
 
 
-def load_analysis_config(path: str | Path) -> dict[str, Any]:
-    """Load a TOML analysis config."""
-    config_path = Path(path)
-    with config_path.open("rb") as f:
-        data = tomllib.load(f)
-    return {
-        "analysis": data.get("analysis", {}),
-        "responsiveness": data.get("responsiveness", {}),
-        "plots": data.get("plots", {}),
-    }
-
-
 def build_output_dir(
     output_root: str | Path,
     file_groups: dict[str, list[str]],
@@ -96,17 +96,17 @@ def run_from_config(
     """Run analysis from config files and save outputs."""
     files_config_paths = _normalize_files_config_paths(files_config)
     file_groups = load_files_configs(files_config_paths)
-    config = load_analysis_config(analysis_config)
+    config = RunConfig.from_toml(analysis_config)
     output_dir = build_output_dir(output_root, file_groups, suffix=suffix)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    analysis_kwargs = dict(config["analysis"])
+    analysis_kwargs = {k: v for k, v in vars(config.analysis).items()}
     min_iti_s = analysis_kwargs.pop("min_iti_s", None)
 
     result = run_analysis(
         file_groups,
-        analysis=AnalysisConfig(**analysis_kwargs),
-        responsiveness=ResponsivenessConfig(**config["responsiveness"]),
+        analysis=config.analysis,
+        responsiveness=config.responsiveness,
     )
 
     if min_iti_s is not None:
@@ -115,7 +115,7 @@ def run_from_config(
     result.to_dataframe(kind="scalar").write_csv(output_dir / "trials.csv")
     result.to_dataframe(kind="long").write_parquet(output_dir / "traces.parquet")
 
-    plots = config["plots"]
+    plots = config.plots
     col_by = plots.get("col_by", "stimulus_offset_deg")
     hue_by = plots.get("hue_by", "group")
     row_by = plots.get("row_by", "is_responsive")
@@ -124,56 +124,45 @@ def run_from_config(
     responses = result.responses
     if responsive_only:
         responses = [r for r in responses if r.get("is_responsive")]
-        result = AnalysisResult(responses)
+        result = AnalysisResult(responses, config)
 
     figures = {
-        "average-angular-velocity.png": result.plot_traces(
-            col_by=col_by, hue_by=hue_by, row_by=row_by
+        "average-angular-velocity.png": plot_responses(
+            responses, col_by=col_by, hue_by=hue_by, row_by=row_by
         ),
-        "average-heading.png": result.plot_heading_traces(
-            col_by=col_by, hue_by=hue_by, row_by=row_by
+        "average-heading.png": plot_heading_traces(
+            responses, col_by=col_by, hue_by=hue_by, row_by=row_by
         ),
-        "heading-change-distribution.png": result.plot_heading_changes(
-            col_by=col_by,
-            hue_by=hue_by,
-            row_by=row_by,
+        "heading-change-distribution.png": plot_heading_changes(
+            responses, col_by=col_by, hue_by=hue_by, row_by=row_by
         ),
-        "responsiveness-rates.png": result.plot_responsiveness_rates(
-            col_by=col_by,
-            hue_by=hue_by,
+        "responsiveness-rates.png": plot_responsiveness_rates(
+            responses, col_by=col_by, hue_by=hue_by
         ),
-        "peak-angular-velocity.png": result.plot_peak_velocity(
-            col_by=col_by,
-            hue_by=hue_by,
-            row_by=row_by,
+        "peak-angular-velocity.png": plot_peak_velocity(
+            responses, col_by=col_by, hue_by=hue_by, row_by=row_by
         ),
-        "turn-proportions.png": result.plot_turn_proportions(
-            x_by=col_by,
-            col_by=hue_by,
+        "turn-proportions.png": plot_turn_proportions(
+            responses, col_by=col_by, group_by=hue_by
         ),
-        "inter-trigger-interval.png": result.plot_inter_trigger_interval(
-            hue_by=hue_by,
+        "inter-trigger-interval.png": plot_inter_trigger_interval(
+            responses, hue_by=hue_by,
             percentile_cutoff=plots.get("iti_percentile_cutoff", None),
         ),
-        "response-latency.png": result.plot_response_latency(hue_by=hue_by),
-        "latency-by-direction.png": result.plot_latency_by_direction(hue_by=hue_by),
-        "peak-aligned-angular-velocity.png": result.plot_peak_aligned_traces(
-            col_by=col_by,
-            hue_by=hue_by,
-            row_by=row_by,
-            half_window_ms=plots.get("peak_aligned_half_window_ms", 100),
-            fallback_window_ms=plots.get("peak_aligned_fallback_window_ms", 200),
+        "response-latency.png": plot_response_latency(responses, hue_by=hue_by),
+        "latency-by-direction.png": plot_latency_by_direction(responses, hue_by=hue_by),
+        "peak-aligned-angular-velocity.png": plot_peak_velocity(
+            responses, col_by=col_by, hue_by=hue_by, row_by=row_by
         ),
-        "screen-position-effect.png": result.plot_screen_position_effect(
-            hue_by=hue_by,
-        ),
-        "heading-change-polar.png": result.plot_heading_changes_polar(
-            hue_by=hue_by,
-            col_by=col_by,
+        "screen-position-effect.png": plot_screen_position_effect(responses, hue_by=hue_by),
+        "heading-change-polar.png": plot_heading_changes_polar(
+            responses, hue_by=hue_by, col_by=col_by
         ),
     }
-    if any(r.get("is_sham") for r in result.responses):
-        figures["sham-vs-real.png"] = result.plot_sham_vs_real(col_by=col_by, hue_by=hue_by)
+    if any(r.get("is_sham") for r in responses):
+        figures["sham-vs-real.png"] = plot_sham_vs_real(
+            responses, col_by=col_by, hue_by=hue_by
+        )
 
     for filename, fig in figures.items():
         fig.savefig(output_dir / filename, dpi=150, bbox_inches="tight")

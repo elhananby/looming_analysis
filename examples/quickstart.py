@@ -14,6 +14,8 @@ from looming_analysis import (
     AnalysisConfig,
     ResponsivenessConfig,
     find_braidz,
+    plot_responses,
+    plot_heading_traces,
     run_analysis,
 )
 
@@ -42,10 +44,10 @@ def main() -> None:
     trials = result.to_dataframe(kind="scalar")
     print(trials)
 
-    fig = result.plot_traces(hue_by="stimulus_offset_deg", baseline_subtract=True)
+    fig = plot_responses(result.responses, hue_by="stimulus_offset_deg", baseline_subtract=True)
     fig.savefig("looming-traces.png", dpi=150, bbox_inches="tight")
 
-    heading_fig = result.plot_heading_traces(hue_by="stimulus_offset_deg")
+    heading_fig = plot_heading_traces(result.responses, hue_by="stimulus_offset_deg")
     heading_fig.savefig("looming-heading.png", dpi=150, bbox_inches="tight")
 
 

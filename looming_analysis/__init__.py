@@ -1,7 +1,7 @@
 """Looming analysis: load `.braidz`, extract responses, plot faceted results."""
 
 from .dataframe import responses_to_dataframe
-from .config import AnalysisConfig, ResponsivenessConfig
+from .config import AnalysisConfig, ResponsivenessConfig, RunConfig
 from .extract import extract_responses, process_all_files, process_file_groups
 from .files import find_braidz
 from .io import load_braidz
@@ -55,5 +55,6 @@ __all__ = [
     "process_all_files",
     "process_file_groups",
     "ResponsivenessConfig",
+    "RunConfig",
     "run_analysis",
 ]

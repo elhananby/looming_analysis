@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import tomllib
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
 
 from ._types import DT_SECONDS
 
@@ -48,6 +51,13 @@ class AnalysisConfig:
     def heading_ref_frames(self) -> int:
         return _ms_to_frames(self.heading_ref_ms)
 
+    @classmethod
+    def from_toml(cls, path: str | Path) -> "AnalysisConfig":
+        """Load an AnalysisConfig from the [analysis] section of a TOML file."""
+        with open(path, "rb") as f:
+            data = tomllib.load(f)
+        return cls(**data.get("analysis", {}))
+
 
 @dataclass(frozen=True)
 class ResponsivenessConfig:
@@ -71,3 +81,30 @@ class ResponsivenessConfig:
             "impulse_threshold_deg": self.impulse_threshold_deg,
             "method": self.method,
         }
+
+
+@dataclass
+class RunConfig:
+    """Combined analysis + responsiveness + plot configuration loaded from a TOML file."""
+
+    analysis: AnalysisConfig = field(default_factory=AnalysisConfig)
+    responsiveness: ResponsivenessConfig = field(default_factory=ResponsivenessConfig)
+    plots: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_toml(cls, path: str | Path) -> "RunConfig":
+        """Load a RunConfig from all sections of a TOML file.
+
+        Supports a ``[plots] facet_by`` key as a single knob that maps to
+        ``col_by`` for all plots (overridden by an explicit ``col_by`` entry).
+        """
+        with open(path, "rb") as f:
+            data = tomllib.load(f)
+        plots: dict[str, Any] = dict(data.get("plots", {}))
+        if "facet_by" in plots and "col_by" not in plots:
+            plots["col_by"] = plots["facet_by"]
+        return cls(
+            analysis=AnalysisConfig(**data.get("analysis", {})),
+            responsiveness=ResponsivenessConfig(**data.get("responsiveness", {})),
+            plots=plots,
+        )

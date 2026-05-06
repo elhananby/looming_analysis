@@ -69,15 +69,12 @@ def test_classify_responsiveness_saccade_uses_negative_signed_peak(
     assert responses[0]["is_responsive"] is True
 
 
-def test_combined_responsiveness_requires_saccade_and_heading(
-    responsive_trace_response,
-    heading_only_response,
-):
-    # no_heading: has a saccade but no xvel/yvel → heading_change=NaN → heading=False
+def test_combined_saccade_without_heading_not_responsive(responsive_trace_response):
+    # Strip velocity vectors → heading_change=NaN → is_responsive_heading=False.
     no_heading = {k: v for k, v in responsive_trace_response.items() if k not in ("xvel", "yvel")}
 
     responses = classify_responsiveness(
-        [no_heading, heading_only_response],
+        [no_heading],
         method="combined",
         threshold_deg_s=500.0,
         heading_threshold_deg=45.0,
@@ -87,9 +84,22 @@ def test_combined_responsiveness_requires_saccade_and_heading(
     assert responses[0]["is_responsive_saccade"] is True
     assert responses[0]["is_responsive_heading"] is False
     assert responses[0]["is_responsive_combined"] is False
-    assert responses[1]["is_responsive_saccade"] is False
-    assert responses[1]["is_responsive_heading"] is True
-    assert responses[1]["is_responsive_combined"] is False
+
+
+def test_combined_heading_without_saccade_not_responsive(heading_only_response):
+    # No saccades in population → fallback reference = end_expansion_time.
+    # heading_only_response turns at end_expansion_time → heading_change ≈ 60° ≥ 45°.
+    responses = classify_responsiveness(
+        [heading_only_response],
+        method="combined",
+        threshold_deg_s=500.0,
+        heading_threshold_deg=45.0,
+        baseline_window_ms=(-90.0, -10.0),
+    )
+
+    assert responses[0]["is_responsive_saccade"] is False
+    assert responses[0]["is_responsive_heading"] is True
+    assert responses[0]["is_responsive_combined"] is False
 
 
 def _make_vel(time: np.ndarray, turn_idx: int, heading_deg: float = 60.0) -> tuple[np.ndarray, np.ndarray]:
@@ -318,7 +328,7 @@ def test_nonresponsive_heading_change_uses_saccade_time_not_method0_peak():
     }
     responses = classify_responsiveness(
         [responsive, nonresponsive],
-        method="saccade",
+        method="combined",
         threshold_deg_s=500.0,
         baseline_window_ms=(-90.0, -10.0),
     )
