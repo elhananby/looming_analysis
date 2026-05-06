@@ -167,6 +167,13 @@ def run_from_config(
         "screen-position-effect.png": result.plot_screen_position_effect(
             hue_by=hue_by,
         ),
+        "heading-change-polar.png": result.plot_heading_changes_polar(
+            hue_by=hue_by,
+            col_by=col_by,
+        ),
+        "heading-change-comparison.png": result.plot_heading_change_comparison(
+            group_by=hue_by,
+        ),
     }
     for filename, fig in figures.items():
         fig.savefig(output_dir / filename, dpi=150, bbox_inches="tight")

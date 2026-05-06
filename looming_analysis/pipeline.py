@@ -12,7 +12,9 @@ from .config import AnalysisConfig, ResponsivenessConfig
 from .dataframe import responses_to_dataframe
 from .extract import process_file_groups
 from .plots import (
+    plot_heading_change_comparison,
     plot_heading_changes,
+    plot_heading_changes_polar,
     plot_heading_traces,
     plot_inter_trigger_interval,
     plot_peak_aligned_traces,
@@ -22,7 +24,6 @@ from .plots import (
     plot_responsiveness_rates,
     plot_screen_position_effect,
     plot_turn_proportions,
-    plot_heading_change_comparison,
 )
 from .plots.peak_aligned import compute_peak_latency, plot_latency_by_direction, plot_response_latency
 from .responsiveness import classify_responsiveness, compute_turn_direction
@@ -56,6 +57,9 @@ class AnalysisResult:
 
     def plot_heading_change_comparison(self, **kwargs) -> Figure:
         return plot_heading_change_comparison(self.responses, **kwargs)
+
+    def plot_heading_changes_polar(self, **kwargs) -> Figure:
+        return plot_heading_changes_polar(self.responses, **kwargs)
 
     def plot_peak_velocity(self, **kwargs) -> Figure:
         return plot_peak_velocity(self.responses, **kwargs)

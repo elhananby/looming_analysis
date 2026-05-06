@@ -35,6 +35,36 @@ def _slice_trial(
     return df_res.fill_null(strategy="forward").fill_null(strategy="backward")
 
 
+def _compute_heading_change_vector(
+    xvel: np.ndarray,
+    yvel: np.ndarray,
+    ref_idx: int,
+    window: int = 10,
+) -> float:
+    """Heading change (degrees) between the mean velocity vectors before and after *ref_idx*.
+
+    The "before" vector is the mean of xvel/yvel over [ref_idx-window, ref_idx) and the
+    "after" vector over [ref_idx, ref_idx+window). Returns nan if either window is empty.
+    """
+    n = len(xvel)
+    pre_slice = slice(max(0, ref_idx - window), ref_idx)
+    post_slice = slice(ref_idx, min(n, ref_idx + window))
+    pre_x, pre_y = xvel[pre_slice], yvel[pre_slice]
+    post_x, post_y = xvel[post_slice], yvel[post_slice]
+    if len(pre_x) == 0 or len(post_x) == 0:
+        return float("nan")
+    before_angle = np.arctan2(np.mean(pre_y), np.mean(pre_x))
+    after_angle = np.arctan2(np.mean(post_y), np.mean(post_x))
+    return float(
+        np.rad2deg(
+            np.arctan2(
+                np.sin(after_angle - before_angle),
+                np.cos(after_angle - before_angle),
+            )
+        )
+    )
+
+
 def _compute_heading_change(
     headings: np.ndarray,
     stim_idx: int,
@@ -171,20 +201,27 @@ def extract_responses(
         heading_change = _compute_heading_change(
             headings, stim_idx, stim_idx + expansion_frames, heading_ref_frames
         )
+        stim_mid_idx = stim_idx + expansion_frames // 2
+        heading_change_stim_vector = _compute_heading_change_vector(
+            xvel, yvel, stim_mid_idx, window=heading_ref_frames
+        )
         ang_vel = calculate_angular_velocity(xvel, yvel, dt, params=[2, 0.2])
         heading_deg = np.rad2deg(np.arctan2(np.sin(headings), np.cos(headings)))
 
         response_data: Response = {
             "ang_vel": ang_vel,
+            "xvel": xvel,
+            "yvel": yvel,
             "heading": headings,
             "heading_deg": heading_deg,
             "heading_change": heading_change,
+            "heading_change_stim_vector": heading_change_stim_vector,
             "end_expansion_time": expansion_frames * dt,
             "time": (df_res["frame"].to_numpy() - stim_frame) * dt,
             **{
                 key: val
                 for key, val in row.items()
-                if key not in ["frame", "timestamp", "obj_id"]
+                if key not in ["frame", "timestamp", "obj_id", "xvel", "yvel"]
             },
         }
         responses.append(response_data)
@@ -248,7 +285,10 @@ def process_all_files(
         trigger_params = load_trigger_config(path)
         if "timestamp" in df_stim.columns:
             df_stim = df_stim.sort("timestamp").with_columns(
-                pl.col("timestamp").diff().alias("inter_trigger_interval")
+                pl.col("timestamp")
+                .diff()
+                .fill_null(float("nan"))
+                .alias("inter_trigger_interval")
             )
         responses = extract_responses(
             df_kalman,

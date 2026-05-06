@@ -62,11 +62,10 @@ def plot_heading_changes(
 
 
 _HEADING_METRICS = [
-    ("heading_change", "Net change\n(original)", True),
-    ("heading_change_window_net", "Net change\n(detection window)", True),
-    ("heading_change_max_dev", "Max deviation\nfrom baseline", False),
-    ("heading_change_post_saccade", "Post-saccade\nnet change", True),
-    ("heading_change_path_length", "Path length\n(total rotation)", False),
+    ("heading_change", "Stim\n(circmean)", True),
+    ("heading_change_peak_aligned", "Peak\n(circmean)", True),
+    ("heading_change_stim_vector", "Stim\n(vector)", True),
+    ("heading_change_peak_vector", "Peak\n(vector)", True),
 ]
 
 
@@ -82,25 +81,20 @@ def plot_heading_change_comparison(
     responses: list[Response],
     group_by: str = "group",
     heading_threshold_deg: float = 30.0,
+    n_polar_bins: int = 36,
     figsize: Optional[tuple[float, float]] = None,
 ) -> Figure:
-    """Compare five heading change metrics across experimental groups.
+    """Compare four heading change methods: violin plots (top) + polar histograms (bottom).
 
-    Each panel shows one metric. Within each panel, groups are arranged
-    side-by-side. Responsive flies use the full group color; non-responsive
-    flies use a lighter tint of the same color. A dashed line marks
-    ``heading_threshold_deg`` on net-change panels.
-
-    Requires ``classify_responsiveness`` to have been called first. The four
-    new heading metrics also require ``r["heading"]`` (set by
-    ``extract_responses``); panels with all-NaN values are left empty.
+    Columns: Stim circmean | Peak circmean | Stim vector | Peak vector.
+    Responsive flies use the full group color; non-responsive use a lighter tint.
 
     Args:
         responses: Response list.
-        group_by: Response field used to split into groups (default ``"group"``).
-            Falls back to a single unlabelled group when the field is absent.
-        heading_threshold_deg: Threshold line drawn on net-change panels.
-        figsize: Overall figure size. Defaults to ``(18, 5)``.
+        group_by: Field used to split into groups (default ``"group"``).
+        heading_threshold_deg: Dashed threshold lines on violin panels.
+        n_polar_bins: Number of angular bins in polar histograms (default 36 = 10 deg).
+        figsize: Overall figure size. Defaults to ``(16, 10)``.
 
     Returns:
         The matplotlib Figure.
@@ -108,21 +102,30 @@ def plot_heading_change_comparison(
     import matplotlib.colors as mcolors
 
     if figsize is None:
-        figsize = (18, 5)
+        figsize = (16, 10)
 
     from ._common import unique_values
 
+    n_metrics = len(_HEADING_METRICS)
     groups = unique_values(responses, group_by) or [None]
     base_colors = plt.cm.tab10(np.linspace(0, 0.9, len(groups)))
     color_map = {g: mcolors.to_hex(c) for g, c in zip(groups, base_colors)}
 
+    fig = plt.figure(figsize=figsize)
+    violin_axes = [
+        fig.add_subplot(2, n_metrics, col + 1) for col in range(n_metrics)
+    ]
+    polar_axes = [
+        fig.add_subplot(2, n_metrics, n_metrics + col + 1, projection="polar")
+        for col in range(n_metrics)
+    ]
+
     violin_width = 0.55
-    group_spacing = 1.0  # gap between groups
-    responsive_offset = 0.35  # responsive violin offset within a group
+    group_spacing = 1.0
+    responsive_offset = 0.35
 
-    fig, axes = plt.subplots(1, len(_HEADING_METRICS), figsize=figsize, sharey=False)
-
-    for ax, (field, label, show_threshold) in zip(axes, _HEADING_METRICS):
+    # ── Row 1: violin plots ───────────────────────────────────────────────────
+    for ax, (field, label, show_threshold) in zip(violin_axes, _HEADING_METRICS):
         tick_positions: list[float] = []
         tick_labels: list[str] = []
 
@@ -176,20 +179,8 @@ def plot_heading_change_comparison(
             tick_labels.append(str(grp) if grp is not None else "all")
 
         if show_threshold:
-            ax.axhline(
-                heading_threshold_deg,
-                color="k",
-                linestyle="--",
-                linewidth=0.8,
-                alpha=0.5,
-            )
-            ax.axhline(
-                -heading_threshold_deg,
-                color="k",
-                linestyle="--",
-                linewidth=0.8,
-                alpha=0.5,
-            )
+            ax.axhline(heading_threshold_deg, color="k", linestyle="--", linewidth=0.8, alpha=0.5)
+            ax.axhline(-heading_threshold_deg, color="k", linestyle="--", linewidth=0.8, alpha=0.5)
         ax.axhline(0, color="k", linewidth=0.4, alpha=0.3)
         ax.set_xticks(tick_positions)
         ax.set_xticklabels(tick_labels, fontsize=8)
@@ -197,23 +188,141 @@ def plot_heading_change_comparison(
         ax.set_ylabel("degrees")
         ax.grid(True, axis="y", alpha=0.3)
 
-    # Legend: one entry per group (full color = responsive, light = non-responsive)
+    # ── Row 2: polar histograms ───────────────────────────────────────────────
+    bin_edges = np.linspace(-np.pi, np.pi, n_polar_bins + 1)
+    bin_width = bin_edges[1] - bin_edges[0]
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+    for ax, (field, label, _) in zip(polar_axes, _HEADING_METRICS):
+        ax.set_theta_zero_location("N")
+        ax.set_theta_direction(-1)
+
+        for gi, grp in enumerate(groups):
+            base_col = color_map[grp]
+            light_col = _lighten(base_col)
+
+            for responsive, face_col in ((True, base_col), (False, light_col)):
+                subset = [
+                    r
+                    for r in responses
+                    if (group_by is None or r.get(group_by) == grp)
+                    and r.get("is_responsive") is responsive
+                ]
+                vals_deg = [
+                    r[field]
+                    for r in subset
+                    if r.get(field) is not None
+                    and not (isinstance(r[field], float) and np.isnan(r[field]))
+                ]
+                if not vals_deg:
+                    continue
+                vals_rad = np.deg2rad(vals_deg)
+                counts, _ = np.histogram(vals_rad, bins=bin_edges)
+                ax.bar(bin_centers, counts, width=bin_width, color=face_col, alpha=0.6)
+
+        ax.set_title(label, fontsize=9, pad=12)
+
+    # ── Legend ────────────────────────────────────────────────────────────────
     legend_handles = []
     for grp in groups:
         col = color_map[grp]
         lbl = str(grp) if grp is not None else "all"
         legend_handles.append(Patch(facecolor=col, alpha=0.85, label=f"{lbl} (resp.)"))
-        legend_handles.append(
-            Patch(facecolor=_lighten(col), alpha=0.85, label=f"{lbl} (non-resp.)")
-        )
+        legend_handles.append(Patch(facecolor=_lighten(col), alpha=0.85, label=f"{lbl} (non-resp.)"))
 
-    fig.legend(
-        handles=legend_handles,
-        loc="upper right",
-        fontsize=8,
-        bbox_to_anchor=(1.0, 1.0),
-        ncol=1,
+    fig.legend(handles=legend_handles, loc="upper right", fontsize=8,
+               bbox_to_anchor=(1.0, 1.0), ncol=1)
+    fig.suptitle("Heading change method comparison", y=1.01)
+    fig.tight_layout()
+    return fig
+
+
+def plot_heading_changes_polar(
+    responses: list[Response],
+    *,
+    hue_by: Optional[str] = None,
+    col_by: Optional[str] = None,
+    field: str = "heading_change",
+    n_bins: int = 36,
+    responsive_only: bool = False,
+    ax_size: tuple[float, float] = (5, 5),
+) -> Figure:
+    """Polar histogram of heading changes with 0 degrees at north (top).
+
+    Args:
+        responses: Response list.
+        hue_by: Field for color grouping (each group drawn as overlapping bars).
+        col_by: Field for subplot columns (one polar axis per unique value).
+        field: Response key to plot (default ``"heading_change"``).
+        n_bins: Number of angular bins (default 36 = 10 deg per bin).
+        responsive_only: If True, include only trials where ``is_responsive`` is True.
+        ax_size: (width, height) per subplot in inches.
+
+    Returns:
+        The matplotlib Figure.
+    """
+    from ._common import build_hue_colormap, unique_values
+
+    if responsive_only:
+        responses = [r for r in responses if r.get("is_responsive")]
+
+    col_vals = (unique_values(responses, col_by) if col_by else None) or [None]
+    hue_vals = unique_values(responses, hue_by) if hue_by else [None]
+    color_map = build_hue_colormap(responses, hue_by)
+
+    n_cols = len(col_vals)
+    fig, axes = plt.subplots(
+        1,
+        n_cols,
+        figsize=(ax_size[0] * n_cols, ax_size[1]),
+        subplot_kw={"projection": "polar"},
     )
-    fig.suptitle("Heading change metrics comparison", y=1.02)
+    if n_cols == 1:
+        axes = [axes]
+
+    bin_edges = np.linspace(-np.pi, np.pi, n_bins + 1)
+    bin_width = bin_edges[1] - bin_edges[0]
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+    for ax, col_val in zip(axes, col_vals):
+        ax.set_theta_zero_location("N")
+        ax.set_theta_direction(-1)
+
+        for hue_val in hue_vals:
+            subset = responses
+            if col_by and col_val is not None:
+                subset = [r for r in subset if r.get(col_by) == col_val]
+            if hue_by and hue_val is not None:
+                subset = [r for r in subset if r.get(hue_by) == hue_val]
+
+            vals_deg = [
+                r[field]
+                for r in subset
+                if r.get(field) is not None
+                and not (isinstance(r[field], float) and np.isnan(r[field]))
+            ]
+            if not vals_deg:
+                continue
+
+            vals_rad = np.deg2rad(vals_deg)
+            counts, _ = np.histogram(vals_rad, bins=bin_edges)
+            color = color_map.get(hue_val, "steelblue") if hue_by else "steelblue"
+            label = str(hue_val) if hue_val is not None else None
+            ax.bar(
+                bin_centers,
+                counts,
+                width=bin_width,
+                color=color,
+                alpha=0.6,
+                label=label,
+            )
+
+        title = f"{col_val}" if col_val is not None else "All"
+        ax.set_title(title, pad=12)
+
+        if hue_by and any(h is not None for h in hue_vals):
+            ax.legend(loc="upper right", bbox_to_anchor=(1.3, 1.1), fontsize=8)
+
+    fig.suptitle(f"Polar distribution: {field}", y=1.02)
     fig.tight_layout()
     return fig

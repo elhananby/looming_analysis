@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 from scipy.signal import find_peaks
 from scipy.stats import circmean
 
 from ._types import DT_SECONDS, Response
+from .extract import _compute_heading_change_vector
 
 RESPONSIVENESS_METHOD_FIELDS = {
     "peak": "is_responsive_peak",
@@ -216,11 +219,14 @@ def classify_responsiveness(
             distance=5,
         )
         if peak_locals.size > 0:
-            peak = float(ang_vel_abs[win_indices[peak_locals[0]]])
+            peak_global_idx = int(win_indices[peak_locals[0]])
+            peak = float(ang_vel_abs[peak_global_idx])
         else:
+            peak_global_idx = -1
             peak = float("nan")
         r["peak_ang_vel_deg_s"] = peak
         r["is_responsive_peak"] = not np.isnan(peak)
+        r["_peak_global_idx"] = peak_global_idx
 
         # ------------------------------------------------------------------
         # Method 1 — z-score relative to pre-stim baseline
@@ -353,6 +359,7 @@ def classify_responsiveness(
         r["heading_change_max_dev"] = hc_max_dev
         r["heading_change_post_saccade"] = hc_post_saccade
         r["heading_change_path_length"] = hc_path_length
+
         r["is_responsive_heading_window_net"] = (
             not np.isnan(hc_window_net) and abs(hc_window_net) >= heading_threshold_deg
         )
@@ -376,5 +383,65 @@ def classify_responsiveness(
         )
         r["responsiveness_method"] = method
         r["is_responsive"] = bool(r[RESPONSIVENESS_METHOD_FIELDS[method]])
+
+    # ------------------------------------------------------------------
+    # H4/H5 — peak-aligned heading metrics (second pass)
+    # For responsive flies: ref = detected peak angular velocity index.
+    # For non-responsive flies: ref = average peak latency of responsive flies,
+    #   so non-responsive trials are evaluated at the typical response time.
+    # ------------------------------------------------------------------
+    responsive_peak_times = [
+        float(r["time"][r["_peak_global_idx"]])
+        for r in responses
+        if r.get("is_responsive") and r["_peak_global_idx"] >= 0
+    ]
+    mean_peak_time = float(np.mean(responsive_peak_times)) if responsive_peak_times else None
+
+    _ref_frames = 10
+    for r in responses:
+        time = r["time"]
+        end_t = r["end_expansion_time"]
+        peak_global_idx = r.pop("_peak_global_idx")
+
+        if peak_global_idx >= 0:
+            ref_idx = peak_global_idx
+        elif mean_peak_time is not None:
+            ref_idx = int(np.argmin(np.abs(time - mean_peak_time)))
+        else:
+            ref_idx = int(np.argmin(np.abs(time - end_t)))
+
+        heading = r.get("heading")
+        if heading is not None:
+            pre_pk = heading[max(0, ref_idx - _ref_frames) : ref_idx]
+            post_pk = heading[ref_idx : ref_idx + _ref_frames]
+            if len(pre_pk) > 0 and len(post_pk) > 0:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    h_pre_pk = circmean(pre_pk, low=-np.pi, high=np.pi)
+                    h_post_pk = circmean(post_pk, low=-np.pi, high=np.pi)
+                hc_peak_aligned = float(
+                    np.rad2deg(
+                        np.arctan2(
+                            np.sin(h_post_pk - h_pre_pk),
+                            np.cos(h_post_pk - h_pre_pk),
+                        )
+                    )
+                )
+            else:
+                hc_peak_aligned = float("nan")
+
+            xvel = r.get("xvel")
+            yvel = r.get("yvel")
+            hc_peak_vector = (
+                _compute_heading_change_vector(xvel, yvel, ref_idx, window=_ref_frames)
+                if xvel is not None and yvel is not None
+                else float("nan")
+            )
+        else:
+            hc_peak_aligned = float("nan")
+            hc_peak_vector = float("nan")
+
+        r["heading_change_peak_aligned"] = hc_peak_aligned
+        r["heading_change_peak_vector"] = hc_peak_vector
 
     return responses

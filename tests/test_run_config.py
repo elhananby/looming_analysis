@@ -205,6 +205,9 @@ hue_by = "group"
         def plot_screen_position_effect(self, **kwargs):
             return FakeFigure("screen-position-effect")
 
+        def plot_heading_changes_polar(self, **kwargs):
+            return FakeFigure("heading-change-polar")
+
     calls = {}
 
     def fake_run_analysis(file_groups, **kwargs):
