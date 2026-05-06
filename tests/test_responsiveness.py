@@ -73,7 +73,8 @@ def test_combined_responsiveness_requires_saccade_and_heading(
     responsive_trace_response,
     heading_only_response,
 ):
-    no_heading = {**responsive_trace_response, "heading_change": 10.0}
+    # no_heading: has a saccade but no xvel/yvel → heading_change=NaN → heading=False
+    no_heading = {k: v for k, v in responsive_trace_response.items() if k not in ("xvel", "yvel")}
 
     responses = classify_responsiveness(
         [no_heading, heading_only_response],
@@ -91,14 +92,27 @@ def test_combined_responsiveness_requires_saccade_and_heading(
     assert responses[1]["is_responsive_combined"] is False
 
 
+def _make_vel(time: np.ndarray, turn_idx: int, heading_deg: float = 60.0) -> tuple[np.ndarray, np.ndarray]:
+    speed = 0.1
+    xvel = np.full(len(time), speed)
+    yvel = np.zeros(len(time))
+    angle_rad = np.deg2rad(heading_deg)
+    xvel[turn_idx:] = speed * np.cos(angle_rad)
+    yvel[turn_idx:] = speed * np.sin(angle_rad)
+    return xvel, yvel
+
+
 def test_combined_responsiveness_requires_find_peaks_saccade():
     time = np.arange(-0.1, 0.5, 0.01)
     ang_vel_deg_s = np.linspace(0.0, 700.0, len(time))
+    turn_idx = int(np.argmin(np.abs(time - 0.30)))
+    xvel, yvel = _make_vel(time, turn_idx)
     response = {
         "time": time,
         "ang_vel": np.deg2rad(ang_vel_deg_s),
+        "xvel": xvel,
+        "yvel": yvel,
         "end_expansion_time": 0.30,
-        "heading_change": 60.0,
     }
 
     responses = classify_responsiveness(
@@ -119,14 +133,14 @@ def test_saccade_window_can_be_asymmetric():
     time = np.arange(-0.1, 0.5, 0.01)
     ang_vel_deg_s = np.zeros_like(time)
     peak_idx = np.argmin(np.abs(time - 0.20))
-    ang_vel_deg_s[peak_idx - 2 : peak_idx + 3] = (
-        600.0  # 5-sample / 50ms rectangular saccade
-    )
+    ang_vel_deg_s[peak_idx - 2 : peak_idx + 3] = 600.0
+    xvel, yvel = _make_vel(time, int(peak_idx))
     response = {
         "time": time,
         "ang_vel": np.deg2rad(ang_vel_deg_s),
+        "xvel": xvel,
+        "yvel": yvel,
         "end_expansion_time": 0.30,
-        "heading_change": 60.0,
     }
 
     narrow = classify_responsiveness(
@@ -150,103 +164,23 @@ def test_saccade_window_can_be_asymmetric():
     assert wide[0]["is_responsive"] is True
 
 
-def _response_with_heading(heading_deg_at_peak: float = 60.0) -> dict:
-    """Synthetic response with a heading turn and a 5-sample saccade."""
-    time = np.arange(-0.1, 0.6, 0.01)
-    ang_vel_deg_s = np.zeros_like(time)
-    headings = np.zeros(len(time))
-    peak_idx = np.argmin(np.abs(time - 0.30))
-    ang_vel_deg_s[peak_idx - 2 : peak_idx + 3] = 600.0
-    # Simulate heading rotating during the saccade
-    headings[peak_idx:] = np.deg2rad(heading_deg_at_peak)
-    return {
-        "time": time,
-        "ang_vel": np.deg2rad(ang_vel_deg_s),
-        "heading": headings,
-        "end_expansion_time": 0.30,
-        "heading_change": heading_deg_at_peak,
-    }
-
-
-def test_heading_change_fields_present_when_heading_array_available():
-    r = _response_with_heading(60.0)
-    responses = classify_responsiveness(
-        [r],
-        threshold_deg_s=500.0,
-        heading_threshold_deg=30.0,
-        baseline_window_ms=(-90.0, -10.0),
-    )
-    out = responses[0]
-    for field in (
-        "heading_change_window_net",
-        "heading_change_max_dev",
-        "heading_change_post_saccade",
-        "heading_change_path_length",
-    ):
-        assert field in out, f"missing field: {field}"
-        assert isinstance(out[field], float), f"{field} should be float"
-
-
-def test_heading_change_post_saccade_nan_when_no_saccade():
-    time = np.arange(-0.1, 0.6, 0.01)
-    r = {
-        "time": time,
-        "ang_vel": np.zeros(len(time)),
-        "heading": np.zeros(len(time)),
-        "end_expansion_time": 0.30,
-        "heading_change": 0.0,
-    }
-    responses = classify_responsiveness(
-        [r],
-        threshold_deg_s=500.0,
-        baseline_window_ms=(-90.0, -10.0),
-    )
-    assert np.isnan(responses[0]["heading_change_post_saccade"])
-
-
-def test_heading_change_fields_nan_without_heading_array(responsive_trace_response):
-    responses = classify_responsiveness(
-        [responsive_trace_response],
-        threshold_deg_s=500.0,
-        baseline_window_ms=(-90.0, -10.0),
-    )
-    for field in (
-        "heading_change_window_net",
-        "heading_change_max_dev",
-        "heading_change_post_saccade",
-        "heading_change_path_length",
-    ):
-        assert np.isnan(responses[0][field]), (
-            f"{field} should be NaN without heading array"
-        )
-
-
-# ---------------------------------------------------------------------------
-# Peak-aligned second-pass metrics
-# ---------------------------------------------------------------------------
-
 def _response_with_vel(heading_change_deg: float = 60.0) -> dict:
     """Synthetic response with xvel/yvel and a heading turn."""
     time = np.arange(-0.1, 0.6, 0.01)
     ang_vel_deg_s = np.zeros_like(time)
-    headings = np.zeros(len(time))
-    xvel = np.ones(len(time)) * 0.1
-    yvel = np.zeros(len(time))
     peak_idx = np.argmin(np.abs(time - 0.30))
     ang_vel_deg_s[peak_idx - 2 : peak_idx + 3] = 600.0
-    headings[peak_idx:] = np.deg2rad(heading_change_deg)
+    xvel, yvel = _make_vel(time, int(peak_idx), heading_change_deg)
     return {
         "time": time,
         "ang_vel": np.deg2rad(ang_vel_deg_s),
-        "heading": headings,
         "xvel": xvel,
         "yvel": yvel,
         "end_expansion_time": 0.30,
-        "heading_change": heading_change_deg,
     }
 
 
-def test_peak_aligned_metrics_present_after_classify():
+def test_canonical_heading_change_present_after_classify():
     r = _response_with_vel(60.0)
     responses = classify_responsiveness(
         [r],
@@ -255,12 +189,12 @@ def test_peak_aligned_metrics_present_after_classify():
         baseline_window_ms=(-90.0, -10.0),
     )
     out = responses[0]
-    for field in ("heading_change_peak_aligned", "heading_change_peak_vector", "heading_change_rdp"):
-        assert field in out, f"missing field: {field}"
-        assert isinstance(out[field], float), f"{field} should be float"
+    assert "heading_change" in out
+    assert isinstance(out["heading_change"], float)
+    assert not np.isnan(out["heading_change"])
 
 
-def test_peak_aligned_and_peak_vector_finite_for_responsive():
+def test_canonical_heading_change_finite_for_responsive():
     r = _response_with_vel(60.0)
     responses = classify_responsiveness(
         [r],
@@ -268,23 +202,17 @@ def test_peak_aligned_and_peak_vector_finite_for_responsive():
         heading_threshold_deg=30.0,
         baseline_window_ms=(-90.0, -10.0),
     )
-    out = responses[0]
-    assert not np.isnan(out["heading_change_peak_aligned"])
-    assert not np.isnan(out["heading_change_peak_vector"])
+    assert not np.isnan(responses[0]["heading_change"])
 
 
-def test_nonresponsive_uses_population_mean_ref():
-    # A non-responsive trial (no saccade) should still get finite peak-aligned
-    # metrics when there is at least one responsive trial setting a mean latency.
+def test_nonresponsive_gets_finite_heading_change():
     responsive = _response_with_vel(60.0)
     nonresponsive = {
         "time": responsive["time"].copy(),
         "ang_vel": np.zeros(len(responsive["time"])),
-        "heading": np.zeros(len(responsive["time"])),
         "xvel": np.ones(len(responsive["time"])) * 0.1,
         "yvel": np.zeros(len(responsive["time"])),
         "end_expansion_time": 0.30,
-        "heading_change": 5.0,
     }
     responses = classify_responsiveness(
         [responsive, nonresponsive],
@@ -294,8 +222,8 @@ def test_nonresponsive_uses_population_mean_ref():
     )
     nr = responses[1]
     assert nr["is_responsive"] is False
-    assert not np.isnan(nr["heading_change_peak_aligned"]), (
-        "non-responsive fly should use mean peak latency as ref"
+    assert not np.isnan(nr["heading_change"]), (
+        "non-responsive fly should use mean peak latency as ref and get finite heading_change"
     )
 
 
@@ -305,7 +233,7 @@ def test_nonresponsive_uses_population_mean_ref():
 
 def test_compute_turn_direction_right_from_saccade(responsive_trace_response):
     r = dict(responsive_trace_response)
-    r["ang_vel"] = np.abs(r["ang_vel"])  # positive angular velocity
+    r["ang_vel"] = np.abs(r["ang_vel"])
     classify_responsiveness(
         [r],
         threshold_deg_s=500.0,
@@ -340,3 +268,94 @@ def test_compute_turn_direction_none_for_zero_peak():
     }
     compute_turn_direction([r])
     assert r["turn_direction"] is None
+
+
+# ---------------------------------------------------------------------------
+# Regression tests (plan acceptance criteria)
+# ---------------------------------------------------------------------------
+
+def test_saccade_wider_than_80ms_is_detected():
+    """Bug C regression: width=(3, None) allows saccades longer than 80 ms."""
+    time = np.arange(-0.1, 0.6, 0.01)
+    ang_vel_deg_s = np.zeros_like(time)
+    peak_idx = np.argmin(np.abs(time - 0.30))
+    # 12-sample / 120 ms saccade — exceeds the old width=(3,8) upper bound of 80 ms.
+    ang_vel_deg_s[peak_idx - 6 : peak_idx + 6] = 600.0
+    xvel, yvel = _make_vel(time, int(peak_idx - 6))
+    r = {
+        "time": time,
+        "ang_vel": np.deg2rad(ang_vel_deg_s),
+        "xvel": xvel,
+        "yvel": yvel,
+        "end_expansion_time": 0.30,
+    }
+    responses = classify_responsiveness([r], threshold_deg_s=500.0, baseline_window_ms=(-90.0, -10.0))
+    assert responses[0]["is_responsive_saccade"] is True, "120 ms saccade should be detected"
+
+
+def test_nonresponsive_heading_change_uses_saccade_time_not_method0_peak():
+    """Bug A regression: fallback ref uses saccade_peak_time_ms, not _peak_global_idx."""
+    time = np.arange(-0.1, 0.6, 0.01)
+    ang_vel_deg_s = np.zeros_like(time)
+    # Build a saccade that Method 3 (signed) detects but Method 0 (abs peak) might not.
+    peak_idx = np.argmin(np.abs(time - 0.30))
+    ang_vel_deg_s[peak_idx - 2 : peak_idx + 3] = 600.0
+    xvel, yvel = _make_vel(time, int(peak_idx))
+
+    responsive = {
+        "time": time,
+        "ang_vel": np.deg2rad(ang_vel_deg_s),
+        "xvel": xvel,
+        "yvel": yvel,
+        "end_expansion_time": 0.30,
+    }
+    nonresponsive = {
+        "time": time.copy(),
+        "ang_vel": np.zeros(len(time)),
+        "xvel": np.ones(len(time)) * 0.1,
+        "yvel": np.zeros(len(time)),
+        "end_expansion_time": 0.30,
+    }
+    responses = classify_responsiveness(
+        [responsive, nonresponsive],
+        method="saccade",
+        threshold_deg_s=500.0,
+        baseline_window_ms=(-90.0, -10.0),
+    )
+    nr = responses[1]
+    assert nr["is_responsive"] is False
+    assert not np.isnan(nr["heading_change"]), "non-responsive should get finite heading_change via saccade-time fallback"
+
+
+def test_nonresponsive_signed_peak_ang_vel_is_finite():
+    """Bug F regression: non-responsive fly gets finite signed_peak_ang_vel_deg_s."""
+    time = np.arange(-0.1, 0.6, 0.01)
+    ang_vel_deg_s = np.zeros_like(time)
+    peak_idx = np.argmin(np.abs(time - 0.30))
+    ang_vel_deg_s[peak_idx - 2 : peak_idx + 3] = 600.0
+    xvel, yvel = _make_vel(time, int(peak_idx))
+
+    responsive = {
+        "time": time,
+        "ang_vel": np.deg2rad(ang_vel_deg_s),
+        "xvel": xvel,
+        "yvel": yvel,
+        "end_expansion_time": 0.30,
+    }
+    nonresponsive = {
+        "time": time.copy(),
+        "ang_vel": np.zeros(len(time)),
+        "xvel": np.ones(len(time)) * 0.1,
+        "yvel": np.zeros(len(time)),
+        "end_expansion_time": 0.30,
+    }
+    responses = classify_responsiveness(
+        [responsive, nonresponsive],
+        method="saccade",
+        threshold_deg_s=500.0,
+        baseline_window_ms=(-90.0, -10.0),
+    )
+    compute_turn_direction(responses)
+    nr = responses[1]
+    assert nr["is_responsive"] is False
+    assert not np.isnan(nr["signed_peak_ang_vel_deg_s"]), "non-responsive should get finite signed_peak_ang_vel_deg_s"

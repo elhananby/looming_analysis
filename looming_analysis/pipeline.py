@@ -13,10 +13,8 @@ from .config import AnalysisConfig, ResponsivenessConfig
 from .dataframe import responses_to_dataframe
 from .extract import process_file_groups
 from .plots import (
-    plot_heading_change_comparison,
     plot_heading_changes,
     plot_heading_changes_polar,
-    plot_rdp_debug,
     plot_heading_traces,
     plot_inter_trigger_interval,
     plot_peak_aligned_traces,
@@ -57,14 +55,8 @@ class AnalysisResult:
     def plot_heading_changes(self, **kwargs) -> Figure:
         return plot_heading_changes(self.responses, **kwargs)
 
-    def plot_heading_change_comparison(self, **kwargs) -> Figure:
-        return plot_heading_change_comparison(self.responses, **kwargs)
-
     def plot_heading_changes_polar(self, **kwargs) -> Figure:
         return plot_heading_changes_polar(self.responses, **kwargs)
-
-    def plot_rdp_debug(self, **kwargs) -> Figure:
-        return plot_rdp_debug(self.responses, **kwargs)
 
     def plot_peak_velocity(self, **kwargs) -> Figure:
         return plot_peak_velocity(self.responses, **kwargs)

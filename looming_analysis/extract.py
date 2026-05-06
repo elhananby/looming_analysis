@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import warnings
 from typing import Optional
 
 import numpy as np
 import polars as pl
-from scipy.stats import circmean
 
 from ._types import DT_SECONDS, Response, _circ_diff_deg
 from .io import load_braidz, load_trigger_config
@@ -119,32 +117,6 @@ def _compute_rdp_turn_angle(
     }
 
 
-def _compute_heading_change(
-    headings: np.ndarray,
-    stim_idx: int,
-    end_expansion_idx: int,
-    ref_frames: int,
-) -> float:
-    """Heading change in degrees, wrapped to [-180, 180]."""
-    pre_window = (
-        headings[max(0, stim_idx - ref_frames) : stim_idx]
-        if stim_idx > 0
-        else headings[:1]
-    )
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", RuntimeWarning)
-        heading_before = circmean(pre_window, low=-np.pi, high=np.pi)
-
-    post_window = headings[end_expansion_idx : end_expansion_idx + ref_frames]
-    if len(post_window) == 0:
-        post_window = headings[-ref_frames:]
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", RuntimeWarning)
-        heading_after = circmean(post_window, low=-np.pi, high=np.pi)
-
-    return float(_circ_diff_deg(heading_after, heading_before))
-
-
 def extract_responses(
     df_kalman: pl.DataFrame,
     df_stim: pl.DataFrame,
@@ -241,13 +213,6 @@ def extract_responses(
         expansion_duration_ms = row.get("expansion_duration_ms", 500)
         expansion_frames = int(expansion_duration_ms / (DT_SECONDS * 1000))
 
-        heading_change = _compute_heading_change(
-            headings, stim_idx, stim_idx + expansion_frames, heading_ref_frames
-        )
-        stim_mid_idx = stim_idx + expansion_frames // 2
-        heading_change_stim_vector = _compute_heading_change_vector(
-            xvel, yvel, stim_mid_idx, window=heading_ref_frames
-        )
         ang_vel = calculate_angular_velocity(xvel, yvel, dt, params=[2, 0.2])
         heading_deg = np.rad2deg(np.arctan2(np.sin(headings), np.cos(headings)))
 
@@ -257,8 +222,6 @@ def extract_responses(
             "yvel": yvel,
             "heading": headings,
             "heading_deg": heading_deg,
-            "heading_change": heading_change,
-            "heading_change_stim_vector": heading_change_stim_vector,
             "end_expansion_time": expansion_frames * dt,
             "time": (df_res["frame"].to_numpy() - stim_frame) * dt,
             **{

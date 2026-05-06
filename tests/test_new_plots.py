@@ -1,4 +1,4 @@
-"""Smoke tests for plots added in the heading-change / RDP feature."""
+"""Smoke tests for heading-change and RDP debug plots."""
 
 from __future__ import annotations
 
@@ -7,11 +7,11 @@ import pytest
 from matplotlib.figure import Figure
 
 from looming_analysis import classify_responsiveness
-from looming_analysis.plots import (
+from looming_analysis.plots.debug import (
     plot_heading_change_comparison,
-    plot_heading_changes_polar,
     plot_rdp_debug,
 )
+from looming_analysis.plots import plot_heading_changes_polar
 
 
 def _classified_responses(n: int = 8) -> list[dict]:
@@ -25,14 +25,18 @@ def _classified_responses(n: int = 8) -> list[dict]:
         if i < n // 2:
             ang_vel_deg_s[peak_idx - 2 : peak_idx + 3] = 600.0
             headings[peak_idx:] = np.deg2rad(60.0)
+        xvel = np.ones(len(time)) * 0.1 + rng.normal(0, 0.01, len(time))
+        yvel = rng.normal(0, 0.01, len(time))
+        if i < n // 2:
+            xvel[peak_idx:] = 0.05 + rng.normal(0, 0.01, len(time) - peak_idx)
+            yvel[peak_idx:] = 0.087 + rng.normal(0, 0.01, len(time) - peak_idx)
         responses.append({
             "time": time.copy(),
             "ang_vel": np.deg2rad(ang_vel_deg_s),
             "heading": headings,
-            "xvel": np.ones(len(time)) * 0.1 + rng.normal(0, 0.01, len(time)),
-            "yvel": rng.normal(0, 0.01, len(time)),
+            "xvel": xvel,
+            "yvel": yvel,
             "end_expansion_time": 0.30,
-            "heading_change": 60.0 if i < n // 2 else 5.0,
             "group": "control",
         })
     return classify_responsiveness(

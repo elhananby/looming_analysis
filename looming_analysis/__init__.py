@@ -6,7 +6,6 @@ from .extract import extract_responses, process_all_files, process_file_groups
 from .files import find_braidz
 from .io import load_braidz
 from .plots import (
-    plot_heading_change_comparison,
     plot_heading_changes,
     plot_heading_changes_polar,
     plot_heading_traces,
@@ -14,7 +13,6 @@ from .plots import (
     plot_latency_by_direction,
     plot_peak_aligned_traces,
     plot_peak_velocity,
-    plot_rdp_debug,
     plot_response_latency,
     plot_responses,
     plot_responses_by_responsiveness,
@@ -39,7 +37,6 @@ __all__ = [
     "load_braidz",
     "normalize_file_selection",
     "responses_to_dataframe",
-    "plot_heading_change_comparison",
     "plot_heading_changes",
     "plot_heading_changes_polar",
     "plot_heading_traces",
@@ -47,7 +44,6 @@ __all__ = [
     "plot_latency_by_direction",
     "plot_peak_aligned_traces",
     "plot_peak_velocity",
-    "plot_rdp_debug",
     "plot_response_latency",
     "plot_responses",
     "plot_responses_by_responsiveness",
