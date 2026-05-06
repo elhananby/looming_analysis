@@ -44,20 +44,20 @@ def responses_to_dataframe(
         return pd.DataFrame(rows)
 
 
+def _scalar_fields(r: dict) -> dict:
+    return {k: v for k, v in r.items() if not isinstance(v, np.ndarray)}
+
+
 def _build_scalar_rows(responses: list[Response]) -> list[dict]:
     """Extract scalar columns (one row per trial)."""
-    rows = []
-    for r in responses:
-        row = {k: v for k, v in r.items() if not isinstance(v, np.ndarray)}
-        rows.append(row)
-    return rows
+    return [_scalar_fields(r) for r in responses]
 
 
 def _build_long_rows(responses: list[Response]) -> list[dict]:
     """Expand to long format (one row per trial × timepoint)."""
     rows = []
     for trial_id, r in enumerate(responses):
-        scalars = {k: v for k, v in r.items() if not isinstance(v, np.ndarray)}
+        scalars = _scalar_fields(r)
         time = r["time"]
         ang_vel_deg_s = np.rad2deg(r["ang_vel"])
         for t, av in zip(time, ang_vel_deg_s):

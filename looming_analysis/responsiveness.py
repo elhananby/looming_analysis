@@ -13,6 +13,7 @@ from .extract import _compute_heading_change_vector, _compute_rdp_turn_angle
 
 _PEAK_KW = dict(height=0.0, prominence=300, width=(3, 8), distance=5)
 _H0_WINDOW_S = 0.1  # trailing window width for H0 net heading change at detection-window end
+_PEAK_ALIGNED_REF_FRAMES = 10  # half-window around detected peak for peak-aligned heading metrics
 
 RESPONSIVENESS_METHOD_FIELDS = {
     "peak": "is_responsive_peak",
@@ -440,7 +441,6 @@ def classify_responsiveness(
     ]
     mean_peak_time = float(np.mean(responsive_peak_times)) if responsive_peak_times else None
 
-    _ref_frames = 10
     for r in responses:
         time = r["time"]
         end_t = r["end_expansion_time"]
@@ -453,6 +453,6 @@ def classify_responsiveness(
         else:
             ref_idx = int(np.argmin(np.abs(time - end_t)))
 
-        _apply_peak_aligned_metrics(r, ref_idx, _ref_frames, rdp_epsilon)
+        _apply_peak_aligned_metrics(r, ref_idx, _PEAK_ALIGNED_REF_FRAMES, rdp_epsilon)
 
     return responses

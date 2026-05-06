@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Literal
 
@@ -119,7 +120,7 @@ def filter_by_iti(
     kept, dropped = [], []
     for r in responses:
         iti = r.get("inter_trigger_interval")
-        if iti is None or (isinstance(iti, float) and iti != iti):  # NaN check
+        if iti is None or (isinstance(iti, float) and math.isnan(iti)):
             kept.append(r)
         elif float(iti) < min_iti_s:
             dropped.append(r)
